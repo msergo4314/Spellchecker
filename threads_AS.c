@@ -14,11 +14,15 @@
 
 #define NUM_INCREMENTS 1e6 // a million
 
-char *username = "username";
+const char *debugFile = "debug.txt";
+const char *username = "username";
 _Atomic int x; // atomic int can only be updated atomically (by a single thread)
 // pthread_mutex_t lock; // do not use global
 int y;
-bool debugOutput = false;
+bool firstWrite = true;
+const bool debugOutput = true; // flag for extra prints to file
+const bool detailedDebug = false;
+_Atomic bool doSorting = false;
 
 typedef struct mistake {
   unsigned int countErrors;
@@ -42,14 +46,15 @@ const unsigned int numEntriesInFile, unsigned int *countTotalMistakes, unsigned 
 void freeArrayOfSpellingErrors(spellingError **arrayOfMistakes, unsigned int countInArr);
 unsigned int numStringMismatchesInArrayOfStrings(const char **arrayOfDictionaryStrings, const char **arrayOfFileStrings,
                                               unsigned int sizeDictionary, unsigned int sizeFile,  const char *target);
-bool verifysortedStr(const char ** sortedArrayOfStrings, const unsigned int numStrings);
-
+bool verifySortedStr(const char ** sortedArrayOfStrings, const unsigned int numStrings);
+bool verifySortedSpellingErrors(const spellingError *arrayOfSpellingErrors, const int numElements);
+int printToLog(const char *debugFile, const char *stringLiteral, ...);
 int partitionSpellingErrorArr(spellingError *arr, int start, int end);
 void quickSortSpellingErrorArr(spellingError *arr, int start, int end);
-
+int printToLog(const char *debugFile, const char *stringLiteral, ...);
 int partitionStr(char **arr, int start, int end);
 void quickSortStr(char ** arr, int start, int end);
-
+char* getNonAlphabeticalCharsString();
 
 enum stringTypes {ALPHA_ONLY, INTEGER, FLOAT, MIXED};
 
@@ -104,18 +109,22 @@ int main(int argc,char **argv) {
       removeNewline(fileNameString);
       
       if (debugOutput) {
-        printf("attempting to read file %s\n\n", fileNameString);
-        printf("split file is:\n\n");
+        printToLog(debugFile, "attempting to read file %s\n", fileNameString);
+        if (detailedDebug) {
+          printToLog(debugFile, "split file is:\n\n");
+        }
       }
       int wordCountDictionary = 0;
       char **dictionaryArrayOfStrings = readFileArray(fileNameString, &wordCountDictionary);
       if (!dictionaryArrayOfStrings) {
-        printf("Reading words array from dictionary file failed!\n");
+        printToLog(debugFile, "Reading words array from dictionary file failed!\n");
       }
       if (debugOutput) {
-        printf("wordcount is: %d\n", wordCountDictionary);
-        for(int i = 0; i < wordCountDictionary; i++) {
-          printf("%s\n", dictionaryArrayOfStrings[i]);
+        printToLog(debugFile, "wordcount is: %d\n", wordCountDictionary);
+        if (detailedDebug) {
+          for(int i = 0; i < wordCountDictionary; i++) {
+            printToLog(debugFile, "%s\n", dictionaryArrayOfStrings[i]);
+          }
         }
       }
       /*********************************************************/
@@ -125,42 +134,52 @@ int main(int argc,char **argv) {
       removeNewline(fileNameString);
       
       if (debugOutput) {
-        printf("attempting to read file %s\n\n", fileNameString);
-        printf("split file is:\n\n");
+        printToLog(debugFile, "\nattempting to read file %s\n", fileNameString);
+        if (detailedDebug) {
+          printToLog(debugFile, "split file is:\n\n");
+        }
       }
       int wordCountFile = 0;
       char **fileArrayOfStrings = readFileArray(fileNameString, &wordCountFile);
       if (!fileArrayOfStrings) {
-        printf("Reading words array from file failed!\n");
+        printToLog(debugFile, "Reading words array from file failed!\n");
       }
-      if (debugOutput) {
-        printf("wordcount is: %d\n", wordCountFile);
-        for(int i = 0; i < wordCountFile; i++) {
-          printf("%s\n", fileArrayOfStrings[i]);
+      if (debugOutput) { // this is very slow so prepare to wait
+        printToLog(debugFile, "word count is: %d\n", wordCountFile);
+        if (detailedDebug) {
+          for(int i = 0; i < wordCountFile; i++) {
+            printToLog(debugFile, "%s\n", fileArrayOfStrings[i]);
+          }
         }
-        if (wordCountDictionary < 1 || wordCountFile < 1) {
-          return(EXIT_FAILURE);
+      }
+      if (wordCountDictionary < 1 || wordCountFile < 1) {
+        if (dictionaryArrayOfStrings) {
+          free2DArray((void ***)&dictionaryArrayOfStrings, wordCountDictionary);
         }
+        if (fileArrayOfStrings) {
+          free2DArray((void ***)&fileArrayOfStrings, wordCountFile);
+        }
+        return(EXIT_FAILURE);
       }
       printf("\nTo stop thread execution do x\n\n");
 
       unsigned int countTotalMistakes, countInArr;
-      
       spellingError *mistakes = compareFileData((const char **)dictionaryArrayOfStrings, (const char **)fileArrayOfStrings,
       wordCountDictionary, wordCountFile, &countTotalMistakes, &countInArr);
-      printf("Exited comparison\n");
-
-      if(debugOutput) {
-        for(int i = 0; i < countInArr; i++) {
-          printf("word: %s count: %d\n", mistakes[i].misspelledString, mistakes[i].countErrors);
-        }
+      if (debugOutput) {
+        printToLog(debugFile, "\nExited comparison\n");
       }
+      if (countInArr == 0) {
+        printf("No mistakes!\n");
+      }
+      free2DArray((void ***)&fileArrayOfStrings, wordCountFile);
       for(int i = 0; i < countInArr; i++) {
         printf("word: %s count: %d\n", mistakes[i].misspelledString, mistakes[i].countErrors);
       }
       freeArrayOfSpellingErrors(&mistakes, countInArr);
       free2DArray((void ***)&dictionaryArrayOfStrings, wordCountDictionary);
-      free2DArray((void ***)&fileArrayOfStrings, wordCountFile);
+      printf("\nThere are %d mistakes in total\n", countInArr);
+
       goto main_menu;
     case 2:
       printf("exiting program\n");
@@ -182,7 +201,7 @@ char *readEntireFileIntoStr(const char *fileName, int *sizeBytes) {
   // assume fd is valid
   int fd;
   if ((fd = open(fileName, O_RDONLY)) == -1) {
-    perror("bad file descriptor. File most likely does not exist\n");
+    printf("bad file descriptor. File most likely does not exist\n");
     return NULL;
   }
   int size = lseek(fd, 0, SEEK_END);                    // sizeof file in bytes
@@ -193,14 +212,14 @@ char *readEntireFileIntoStr(const char *fileName, int *sizeBytes) {
     return NULL;
   }
   if (lseek(fd, 0, SEEK_SET) == -1) {
-    freePointer((void **)&readString);
+    free(readString);
     close(fd);
     perror("lseek failed!\n");
     return NULL;
   }
   int numBytesRead = read(fd, readString, size);
   if (numBytesRead != size) {
-    freePointer((void **)&readString);
+    free(readString);
     close(fd);
     fprintf(stderr, "read failed! Expected %d bytes, received %d\n", size,
             numBytesRead);
@@ -248,14 +267,6 @@ void printFlush(const char *string, ...) {
     fflush(stdout);
 }
 
-// void print(const char *string, ...) {
-//     va_list args;
-//     va_start(args, string);
-//     vprintf(string, args);
-//     va_end(args);
-//     printf("\n");
-// }
-
 char **readFileArray(const char *fileName, int *wordCount) {
   int sizeBytes, numWords;
   char **stringArrToReturn = NULL;
@@ -267,19 +278,40 @@ char **readFileArray(const char *fileName, int *wordCount) {
   convertEntireStringToLower(singleFileString);
   stringArrToReturn = splitStringOnWhiteSpace(singleFileString, &numWords);
   if (stringArrToReturn == NULL) {
-    freePointer((void **)&singleFileString);
+    free(singleFileString);
     return NULL;
   }
-  freePointer((void **)&singleFileString);
+  free(singleFileString);
   *wordCount = numWords;
   return stringArrToReturn;
 }
 
 void convertEntireStringToLower(char *string) {
-  for (long long int index = 0; string[index]; index++) {
-    string[index] = tolower(string[index]);
+  for (long long unsigned int index = 0; string[index]; index++) {
+    if (isalpha(string[index])) {
+      string[index] = tolower(string[index]);
+    }
   }
-  return;
+}
+
+char* getNonAlphabeticalCharsString() {
+    char* nonAlphaString = (char*)malloc(128 * sizeof(char)); // Assuming ASCII
+    if (!nonAlphaString) {
+      return NULL;
+    }
+    if (nonAlphaString == NULL) {
+        perror("Memory allocation failed");
+        return NULL;
+    }
+    nonAlphaString[0] = '\0'; // Initialize as empty string
+    
+    for (int i = 0; i < 128; i++) { // Assuming ASCII
+        if (!isalpha(i)) {
+            char temp[2] = {i, '\0'}; // Convert character to string
+            strcat(nonAlphaString, temp); // Concatenate to result string
+        }
+    }
+    return nonAlphaString;
 }
 
 char** splitStringOnWhiteSpace(const char* inputString, int* wordCount) {
@@ -289,55 +321,57 @@ char** splitStringOnWhiteSpace(const char* inputString, int* wordCount) {
       return NULL;
     }
     *wordCount = 0;
-    bool prevWasWhiteSpace = true;
+    bool prevWasNotAlpha = true;
     const char* ptr;
     for (ptr = inputString; *ptr != '\0'; ptr += sizeof(char)) {
-      // printf("%x\n", *ptr);
-        if (strchr("\x20\x09\x0D\x0A\x0B\x0C\xE2\x80\xA8\xE2\x80\xA9\xA0", *ptr)) {
+        // chars that seperate words: whitespace, special chars, punctuation, digits
+        // strchr(" \t\r\n\v\f\xE2\x80\xA8\xE2\x80\xA9\xA0", *ptr)
+        if (!isalpha(*ptr)) {
           // strchr will return an address if it finds the char in the string
-          if (prevWasWhiteSpace) {
+          if (prevWasNotAlpha) {
             continue;
           }
-          prevWasWhiteSpace = true;
+          prevWasNotAlpha = true;
           // printf("new word: %x\n", *ptr);
           (*wordCount)++;
         }
         else {
-          prevWasWhiteSpace = false;
+          prevWasNotAlpha = false;
         }
     }
-    if (!prevWasWhiteSpace) {
+    if (!prevWasNotAlpha) {
       (*wordCount)++; // Account for the last word at EOF
     }
     // printf("number of words is: %d\n", *wordCount);
     if (*wordCount == 0) {
-      printf("no words in file\n");
+      printf("no words in file. Returning early...\n");
       return NULL;
     }
     // Allocate memory for array of strings
     char **words = (char **)malloc((*wordCount) * sizeof(char *));
     if (words == NULL) {
-        perror("Memory allocation failed for words arr\n");
+        printToLog(debugFile, "Memory allocation failed for words arr\n");
         return NULL;
     }
 
-    // Copy words into array
-    const char delimiters[] = "\x20\x09\x0D\x0A\x0B\x0C\xE2\x80\xA8\xE2\x80\xA9\xA0";
+    char *delimiters = getNonAlphabeticalCharsString();
+    if (!delimiters) {
+      return NULL;
+    }
+    // printf("delims: %s\n", delimiters);
     char* token = strtok((char *)inputString, delimiters); // cast to char *
     int index = 0;
     while (token != NULL) {
         words[index] = strdup(token); // Allocate memory for each word
         if (words[index] == NULL) {
-            perror("Memory allocation failed");
-            for (int i = 0; i < index; ++i) {
-                free(words[i]);
-            }
-            free(words);
+            printToLog(debugFile, "Memory allocation failed for strdup inside splitOnWhitespace");
+            free2DArray((void ***)&words, index);
             return NULL;
         }
         index++;
         token = strtok(NULL, delimiters);
     }
+    free(delimiters);
     return words;
 }
 
@@ -358,7 +392,7 @@ void free2DArray(void ***addressOfGenericPointer, int numberOfInnerElements) {
     for (int i = 0; i < numberOfInnerElements; i++) {
         freePointer(&(genericPointer[i]));
     }
-    freePointer((void *)addressOfGenericPointer);
+    freePointer((void **)addressOfGenericPointer);
     return;
 }
 
@@ -376,21 +410,23 @@ void freePointer(void **addressOfGenericPointer) {
 }
 
 int partitionSpellingErrorArr(spellingError *arr, int start, int end) {
-    spellingError temp;
-    unsigned int pivot = (arr[end]).countErrors;
-    int i = start-1;
-    int j = start;
-    while (j < end) {
-        if(arr[j].countErrors <= pivot) {
-            i += 1;
+    unsigned int pivot = arr[end].countErrors;
+    int i = start - 1;
+
+    for (int j = start; j < end; j++) {
+        if (arr[j].countErrors <= pivot) {
+            i++;
+            // Swap elements individually
+            spellingError temp = arr[i];
+            arr[i] = arr[j];
+            arr[j] = temp;
         }
-        j++;
     }
-    i++; // increment i
-    temp = arr[j];
-    arr[j] = arr[i];
-    arr[i] = temp;
-    return i; // location of pivot (middle of array)
+    // Swap pivot element with the element at i + 1
+    spellingError temp = arr[i + 1];
+    arr[i + 1] = arr[end];
+    arr[end] = temp;
+    return i + 1;
 }
 
 void quickSortSpellingErrorArr(spellingError *arr, int start, int end) {
@@ -398,45 +434,39 @@ void quickSortSpellingErrorArr(spellingError *arr, int start, int end) {
       return;
   }
   int pivotIndex = partitionSpellingErrorArr(arr, start, end);
-  quickSortSpellingErrorArr(arr, start, pivotIndex-1);
+  quickSortSpellingErrorArr(arr, start, pivotIndex - 1);
   quickSortSpellingErrorArr(arr, pivotIndex + 1, end);
   return;
 }
 
 spellingError *compareFileData(const char **dictionaryData, const char ** fileData, const unsigned int numEntriesDictionary,
 const unsigned int numEntriesInFile, unsigned int *countTotalMistakes, unsigned int *countInArr) {
-
   *countTotalMistakes = 0;
   *countInArr = 0;
-  spellingError *mistakesArr = NULL; // one entry
+  spellingError *mistakesArr = NULL; // no entries yet
   unsigned int countMistakesForCurrentWord = 0;
-  char **dictionaryCopySorted = (char **)malloc(sizeof(char *) * numEntriesDictionary);
-  if (dictionaryCopySorted == NULL) {
-    printf("error with mallocing copy...\n");
-    return NULL;
-  }
-  for(int i = 0; i < numEntriesDictionary; i++) {
-    // printf("%s\n", dictionaryData[i]);
-    dictionaryCopySorted[i] = strdup(dictionaryData[i]); //strdup will malloc...be sure to free later
-    if (dictionaryCopySorted[i] == NULL) {
-      printf("error with mallocing copy inner string...\n");
-      while (i > 0) {
-        freePointer((void **)&dictionaryCopySorted[--i]);
-      }
-      freePointer((void **)&dictionaryCopySorted);
+  char **dictionaryCopySorted = NULL;
+  if (doSorting) {
+    dictionaryCopySorted = (char **)malloc(sizeof(char *) * numEntriesDictionary);
+    if (dictionaryCopySorted == NULL) {
+      printToLog(debugFile, "error with mallocing copy...\n");
       return NULL;
     }
-  }
-  quickSortStr(dictionaryCopySorted, 0, numEntriesDictionary - 1); // use quicksort to make sure the dictionary is in alphabetical order
-
-  if (debugOutput) {
-    printf("after sorting:\n");
     for(int i = 0; i < numEntriesDictionary; i++) {
-      printf("%s\n", dictionaryCopySorted[i]);
+      // printf("%s\n", dictionaryData[i]);
+      dictionaryCopySorted[i] = strdup(dictionaryData[i]); //strdup will malloc...be sure to free later
+      if (dictionaryCopySorted[i] == NULL) {
+        printToLog(debugFile, "error with mallocing copy inner string...\n");
+        while (i > 0) {
+          freePointer((void **)&dictionaryCopySorted[--i]);
+        }
+        freePointer((void **)&dictionaryCopySorted);
+        return NULL;
+      }
     }
+    quickSortStr(dictionaryCopySorted, 0, numEntriesDictionary - 1); // use quicksort to make sure the dictionary is in alphabetical order
   }
-
-  if (debugOutput && !verifysortedStr((const char **)dictionaryCopySorted, numEntriesDictionary)) {
+  if (debugOutput && doSorting && !verifySortedStr((const char **)dictionaryCopySorted, numEntriesDictionary)) {
     printf("sort failded\n");
     free2DArray((void ***)&dictionaryCopySorted, numEntriesDictionary);
     return NULL;
@@ -444,7 +474,7 @@ const unsigned int numEntriesInFile, unsigned int *countTotalMistakes, unsigned 
   bool flag = false;
   char **seenWords = malloc(sizeof(char *) * numEntriesInFile);
   if (!seenWords) {
-    perror("failed malloc\n");
+    printToLog(debugFile, "failed malloc\n");
     return NULL;
   }
   for (int i = 0; i < numEntriesInFile; i++) {
@@ -454,8 +484,8 @@ const unsigned int numEntriesInFile, unsigned int *countTotalMistakes, unsigned 
     flag = false;
     for(int j = 0; j < i; j++) {
       if (seenWords[j] != NULL && strcmp(fileData[i], seenWords[j]) == 0) {
-          flag = true; // Word already seen
-          break;
+        flag = true; // Word already seen
+        break;
       }
     }
     if (flag) {
@@ -463,6 +493,9 @@ const unsigned int numEntriesInFile, unsigned int *countTotalMistakes, unsigned 
     }
     seenWords[i] = strdup(fileData[i]);
     // printf("currently i is: %d\n", i);
+    if (!doSorting) {
+      dictionaryCopySorted = (char **)dictionaryData;
+    }
     if ((countMistakesForCurrentWord = numStringMismatchesInArrayOfStrings((const char **)dictionaryCopySorted, (const char **)fileData,
     numEntriesDictionary, numEntriesInFile, fileData[i]))) {
       // this is when a match is NOT found...
@@ -474,20 +507,27 @@ const unsigned int numEntriesInFile, unsigned int *countTotalMistakes, unsigned 
       mistakesArr[(*countInArr) - 1].countErrors = countMistakesForCurrentWord;
       mistakesArr[(*countInArr) - 1].misspelledString = (char *)strdup(fileData[i]);
       if (mistakesArr[(*countInArr) - 1].misspelledString == NULL) {
-        perror("error with malloc for strdup\n");
+        printToLog(debugFile, "error with malloc for strdup\n");
         return NULL;
       }
     }
   }
   free2DArray((void ***)&seenWords, numEntriesInFile);
-  free2DArray((void ***)&dictionaryCopySorted, numEntriesDictionary);
-  quickSortSpellingErrorArr(mistakesArr, 0, (*countInArr) - 1);
+  if (doSorting) {
+    free2DArray((void ***)&dictionaryCopySorted, numEntriesDictionary);
+  }
+  quickSortSpellingErrorArr(mistakesArr, 0, (*countInArr) - 1); // arrange from lowest frequency to highest
+  if (!verifySortedSpellingErrors(mistakesArr, *countInArr)) {
+    printToLog(debugFile, "Error in sort\n");
+    return NULL;
+  }
   return mistakesArr;
 }
 
 unsigned int numStringMismatchesInArrayOfStrings(const char **arrayOfDictionaryStrings, const char **arrayOfFileStrings,
                                               unsigned int sizeDictionary, unsigned int sizeFile,  const char *target) {
   // retuns number of matches found
+  // assumes that arrayOfDictionaryStrings is valid (no checks!)
   for (int i = 0; i < sizeDictionary; i++) {
     if (!strcmp(arrayOfDictionaryStrings[i], target)) {
       return 0; // if a match does exist in the dictionary, the word is valid/correct
@@ -547,7 +587,7 @@ void freeArrayOfSpellingErrors(spellingError **arrayOfMistakes, unsigned int cou
   return;
 }
 
-bool verifysortedStr(const char ** sortedArrayOfStrings, const unsigned int numStrings) {
+bool verifySortedStr(const char ** sortedArrayOfStrings, const unsigned int numStrings) {
   const char *min = sortedArrayOfStrings[0];
 
   for(unsigned int i = 0; i < numStrings; i++) {
@@ -557,4 +597,50 @@ bool verifysortedStr(const char ** sortedArrayOfStrings, const unsigned int numS
     }
   }
   return true;
+}
+
+bool verifySortedSpellingErrors(const spellingError *arrayOfSpellingErrors, const int numElements) {
+  const unsigned int min = arrayOfSpellingErrors[0].countErrors;
+
+for(unsigned int i = 0; i < numElements; i++) {
+  if (arrayOfSpellingErrors[i].countErrors < min) {
+    printf("int %d is less than %d\n", arrayOfSpellingErrors[i].countErrors, min);
+    return false;
+  }
+}
+return true; 
+}
+
+int printToLog(const char *debugFile, const char *stringLiteral, ...) {
+  va_list args;
+  va_start(args, stringLiteral);
+  va_end(args);
+
+  // Open the debug file
+  int fd;
+  if (firstWrite) {
+    if ((fd = open(debugFile, O_CREAT | O_WRONLY | O_TRUNC, 0644)) == -1) {
+      perror("Error opening debug file");
+      return -1;
+    }
+    firstWrite = false;
+  }
+  else {
+    if ((fd = open(debugFile, O_CREAT | O_WRONLY | O_APPEND, 0644)) == -1) {
+      perror("Error opening debug file");
+      return -1;
+    }
+  }
+  // Write the formatted string to the debug file
+  if (vdprintf(fd, stringLiteral, args) == -1) {
+    perror("Error writing to debug file");
+    close(fd);
+    return -1;
+  }
+  // Close the file descriptor
+  if (close(fd) == -1) {
+    perror("Error closing debug file");
+    return -1;
+  }
+  return 0; // Success
 }
