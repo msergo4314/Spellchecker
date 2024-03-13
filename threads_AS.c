@@ -48,7 +48,6 @@ unsigned int numStringMismatchesInArrayOfStrings(const char **arrayOfDictionaryS
                                               unsigned int sizeDictionary, unsigned int sizeFile,  const char *target);
 bool verifySortedStr(const char ** sortedArrayOfStrings, const unsigned int numStrings);
 bool verifySortedSpellingErrors(const spellingError *arrayOfSpellingErrors, const int numElements);
-int printToLog(const char *debugFile, const char *stringLiteral, ...);
 int partitionSpellingErrorArr(spellingError *arr, int start, int end);
 void quickSortSpellingErrorArr(spellingError *arr, int start, int end);
 int printToLog(const char *debugFile, const char *stringLiteral, ...);
@@ -517,7 +516,7 @@ const unsigned int numEntriesInFile, unsigned int *countTotalMistakes, unsigned 
     free2DArray((void ***)&dictionaryCopySorted, numEntriesDictionary);
   }
   quickSortSpellingErrorArr(mistakesArr, 0, (*countInArr) - 1); // arrange from lowest frequency to highest
-  if (!verifySortedSpellingErrors(mistakesArr, *countInArr)) {
+  if (mistakesArr && !verifySortedSpellingErrors(mistakesArr, *countInArr)) {
     printToLog(debugFile, "Error in sort\n");
     return NULL;
   }
