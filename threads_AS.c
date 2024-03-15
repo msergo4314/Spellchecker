@@ -11,7 +11,7 @@ int main(int argc,char **argv) {
   unsigned int numThreadsStarted = 0; // local cop
   unsigned int numThreadsInUse = 0;
   // struct for thread arguments
-  threadArguments args = {0};
+  threadArguments args = {0}; // set all to 0, threads will update values
   args.errorArray = NULL;
   main_menu:
   printf("Main Menu:\n1. Start a new spellchecking task\n2. Exit\n\n");
@@ -41,13 +41,6 @@ int main(int argc,char **argv) {
         printf("Exiting...\n");
         goto main_menu;
       }
-      // pthread_mutex_lock(&lock);
-      // if (!args.numThreadsStarted) {
-      //   args.prevSize = 0;
-      //   args.numThreadsFinished = 0;
-      //   args.numThreadsInUse = 0;
-      //   args.numThreadsStarted = 0;
-      // }
       args.dictionaryFileName = strdup(fileNameString);
       if (!args.dictionaryFileName) {
         perror("Could not malloc with strdup in main. Exiting...\n");
@@ -442,6 +435,7 @@ void *threadFunction(void *vargp) {
       perror("strdup malloc failed!\n");
       freeArrayOfSpellingErrors((spellingError **)&mistakes, data->prevSize + countInArr);
       goto exit_failure;
+      // will attempt to free dictionaryArrayOfStrings and fileListOfStrings but should be safe to double free due to custom function
     }
   }
   pthread_mutex_lock(&lock);
@@ -450,14 +444,22 @@ void *threadFunction(void *vargp) {
     memcpy(&(data->errorArray[i]), &(mistakes[numIterations++]), sizeof(spellingError));
     // printf("Set index %d of errorArray to %s and %d\n", i, data->errorArray[i].misspelledString, data->errorArray[i].countErrors);
   }
+  pthread_mutex_unlock(&lock);
+  quickSortSpellingErrorArr(mistakes, 0, countInArr - 1); // sort high to low
+  // do file IO with sorted results
+  if (writeThreadToFile(threadOutputFile, mistakes, countInArr) == -1) {
+    perror("error with logging output of thread analysis to file!\n");
+    free(mistakes);
+    goto exit_failure;
+  }
   // exit success
+  pthread_mutex_lock(&lock);
   free(data->dictionaryFileName);
   free(data->spellcheckFileName);
+  free(mistakes);
+  pthread_mutex_unlock(&lock);
   data->numThreadsInUse--;
   data->numThreadsFinished++;
-  // quickSortSpellingErrorArr(mistakes, 0, countInArr - 1);
-  // do file IO with sorted results
-  free(mistakes);
   pthread_mutex_unlock(&lock);
   // thread status already set to 0
   return NULL;
@@ -709,13 +711,13 @@ int printToLog(const char *debugFile, const char *stringLiteral, ...) {
 
   // Open the debug file
   int fd;
-  if (firstWrite) {
+  if (firstWriteDebug) {
     if ((fd = open(debugFile, O_CREAT | O_WRONLY | O_TRUNC, 0644)) == -1) {
       perror("Error opening debug file");
       pthread_mutex_unlock(&lock);
       return -1;
     }
-    firstWrite = false;
+    firstWriteDebug = false;
   }
   else {
     if ((fd = open(debugFile, O_CREAT | O_WRONLY | O_APPEND, 0644)) == -1) {
@@ -947,3 +949,106 @@ const char *getFileNameFromThreadID(spellingError *arr, int index, unsigned int 
   }
   return NULL;
 }
+
+unsigned int max(unsigned int a, unsigned int b) {
+  if (a < b) {
+    return b;
+  }
+  return a;
+}
+
+int writeThreadToFile(const char *fileName, spellingError *listOfMistakes, unsigned int numElements) {
+  // asumes the array of spellingErrors is already sorted in descending order
+  pthread_mutex_lock(&lock);
+  int fd;
+  if (firstWriteThreadOutput) {
+    // create if it does not exist.
+    if ((fd = open(debugFile, O_CREAT | O_WRONLY | O_TRUNC, 0644)) == -1) {
+      perror("Error opening spellcheck file");
+      pthread_mutex_unlock(&lock);
+      return -1;
+    }
+    firstWriteThreadOutput = false;
+  }
+  else {
+    // open for appending
+    if ((fd = open(debugFile, O_CREAT | O_WRONLY | O_APPEND, 0644)) == -1) {
+      perror("Error opening spellcheck file");
+      pthread_mutex_unlock(&lock);
+      return -1;
+    }
+  }
+
+  int totalErrors = 0;
+  // listOfMistakes[0] must be valid but should be since numElements >= 1
+  char *currentFileName = listOfMistakes->fileName; // will have \0 at the end
+  for(int i = 0; i < numElements; i++) {
+    totalErrors += listOfMistakes[i].countErrors;
+  }
+  int sizeOfData = 0;
+  char *str = malloc(strlen(currentFileName) + 1);
+  if (!str) {
+    perror("malloc failed inside writeThreadToFile");
+    close(fd);
+    pthread_mutex_unlock(&lock);
+    return -1;
+  }
+  str[0] = '\0';
+  snprintf(str, ((strlen(str)) * sizeof(char)),"%s ", currentFileName); // first comes the filename itself (should be safe)
+  size_t prev = strlen(str) + 1;
+  char *subStr = malloc(max((unsigned int)MAX_FILE_NAME_LENGTH, (unsigned int)MAX_WORD_LENGTH) + 2); // should be more than enough to store the number + space
+  if (!subStr) {
+    free(str);
+    perror("malloc failed inside writeThreadToFile");
+    close(fd);
+    pthread_mutex_unlock(&lock);
+    return -1;
+  }
+  sprintf(subStr, "%d ", totalErrors); // this should add the \0
+  str = realloc(str, prev + strlen(subStr)); // make sure str can hold the substring too
+  prev = strlen(str) + 1;
+  if (!str) {
+    free(subStr);
+    perror("realloc failed inside writeThreadToFile function.\n");
+    close(fd);
+    pthread_mutex_unlock(&lock);
+    return -1;
+  }
+  strcat(str, subStr); // add number string to the line
+  for(int i = 0; i < numElements; i++) {
+    subStr[0] = '\0'; // reset subString
+    strcat(subStr, listOfMistakes[i].misspelledString); // safe since length of misspelled string cannot be > MAX_WORD_LENGTH
+    if (i + 1 < numElements) {
+      strcat(subStr, " ");
+    }
+    strcat(str, subStr);
+  }
+  str = realloc(str, prev + 1); // make sure str can hold the substring too
+  if (!str) {
+    free(subStr);
+    perror("realloc failed inside writeThreadToFile function.\n");
+    close(fd);
+    pthread_mutex_unlock(&lock);
+    return -1;
+  }
+  strcat(str, "\n"); // append \n
+  free(subStr);
+  sizeOfData = strlen(str);
+  // Write the formatted string
+  if (write(fd, str, sizeOfData) == -1) {
+    perror("Error writing to spellcheck file");
+    close(fd);
+    pthread_mutex_unlock(&lock);
+    return -1;
+  }
+  free(str);
+  // Close the file descriptor
+  if (close(fd) == -1) {
+    perror("Error closing spellcheck file");
+    pthread_mutex_unlock(&lock);
+    return -1;
+  }
+  pthread_mutex_unlock(&lock);
+  return 0; // Success
+}
+

@@ -1,4 +1,4 @@
-test.txt
+test*.txt
 *.pdf
 debug.txt
 *.o

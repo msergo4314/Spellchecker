@@ -18,9 +18,11 @@
 
 pthread_mutex_t lock;
 const char *debugFile = "debug.txt";
-const char *username = "username";
+const char *threadOutputFile = "username.txt";
 // pthread_mutex_t lock; // do not use global
-bool firstWrite = true;
+bool firstWriteDebug = true;
+bool firstWriteThreadOutput = true;
+
 const bool debugOutput = true; // flag for extra prints to file
 const bool detailedDebug = true;
 const bool verySlowAndVeryDetailedDebug = true;
@@ -78,9 +80,11 @@ int printToLog(const char *debugFile, const char *stringLiteral, ...);
 int partitionStr(char **arr, int start, int end);
 void quickSortStr(char ** arr, int start, int end);
 char* getNonAlphabeticalCharsString();
+unsigned int max(unsigned int a, unsigned int b);
 unsigned int numStringMismatchesInStrings(const char *dictionaryString, const char *target);
 char* getOutputString (threadArguments threadArgsPtr);
 unsigned int countMistakesForThread(spellingError *errorArr, unsigned int numEntriesInArr, int index);
 const char *getFileNameFromThreadID(spellingError *arr, int index, unsigned int numElements);
 const char *getMistakeAtIndex(spellingError *arr, int threadNum, int index, unsigned int numElements);
 char *generateSummary(spellingError *errorArr, unsigned int numThreads, unsigned int arrayLength, char *inputString);
+int writeThreadToFile(const char *fileName, spellingError *listOfMistakes, unsigned int numElements);
