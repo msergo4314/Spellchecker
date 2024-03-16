@@ -16,7 +16,8 @@
 #include <stdarg.h> // for variable # of function inputs
 #include <limits.h> // needed to check chartype (possibly not necessary)
 
-pthread_mutex_t lock;
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t updatedVariables = PTHREAD_COND_INITIALIZER; // global variable to track when struct updates
 const char *debugFile = "debug.txt";
 const char *threadOutputFile = "username.txt";
 // pthread_mutex_t lock; // do not use global
@@ -24,9 +25,9 @@ bool firstWriteDebug = true;
 bool firstWriteThreadOutput = true;
 
 const bool debugOutput = true; // flag for extra prints to file
-const bool detailedDebug = true;
 const bool verySlowAndVeryDetailedDebug = true;
-const bool doSorting = false;
+const bool detailedDebug = true;
+const bool doSorting = false; // may break code if enabled :) (still bugged?)
 
 typedef struct mistake {
   unsigned int countErrors;
@@ -36,13 +37,12 @@ typedef struct mistake {
   unsigned int threadID;
 } spellingError;
 
-// functionally both input and output for thread functions
+// functionally the struct is both input and output for thread functions
 typedef struct threadArgs {
   char *dictionaryFileName;
   char *spellcheckFileName;
   int threadStatus; // this will be set directly by the thread
   spellingError *errorArray; // array of mistakes appended by each thread
-  // unsigned int threadID;
   unsigned int prevSize; // previous size of mistakes array (needed to realloc)
   unsigned int numThreadsStarted;
   unsigned int numThreadsFinished;
@@ -51,7 +51,7 @@ typedef struct threadArgs {
 
 enum stringTypes {ALPHA_ONLY, INTEGER, FLOAT, MIXED};
 
-// _Atomic unsigned int numThreadsStarted; // atomic varaibles are also an option if you don't want to use mutexes
+// _Atomic unsigned int numThreadsStarted; // atomic varaibles are also an option if you don't want to use mutexes (but can't be used for everything anyway)
 // _Atomic unsigned int numThreadsFinished;
 // _Atomic unsigned int numThreadsInUse;
 
@@ -88,3 +88,5 @@ const char *getFileNameFromThreadID(spellingError *arr, int index, unsigned int 
 const char *getMistakeAtIndex(spellingError *arr, int threadNum, int index, unsigned int numElements);
 char *generateSummary(spellingError *errorArr, unsigned int numThreads, unsigned int arrayLength, char *inputString);
 int writeThreadToFile(const char *fileName, spellingError *listOfMistakes, unsigned int numElements);
+void printToOutputFile(const char *fileName, const char* stringToPrint);
+unsigned int getNumDigitsInNumber(int number, char base);
