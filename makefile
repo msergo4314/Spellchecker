@@ -1,4 +1,5 @@
 CC = gcc
+# CFLAGS = -fopenmp -Wall -g -std=c11 -lpthread
 CFLAGS = -Wall -g -std=c11 -lpthread
 
 SRCS = threads_AS.c

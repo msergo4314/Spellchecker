@@ -2,7 +2,7 @@
 #define MAX_WORD_LENGTH 60
 #define MAX_FILE_NAME_LENGTH 60
 #define MAX_SIZE_USERINPUT 90
-#define MAX_THREADS 16
+#define MAX_THREADS 16 // depends on machine so should be sure to check your machine
 #define MAX_OUTPUT_MESSAGE_SIZE 5000 // in case the filenames are really damn big
 #include <ctype.h> // tolower
 #include <pthread.h> // multithreading
@@ -14,20 +14,19 @@
 #include <fcntl.h> // for file open/read
 #include <unistd.h>
 #include <stdarg.h> // for variable # of function inputs
+// #include <omp.h> // only needed to check how many threads you have
 #include <limits.h> // needed to check chartype (possibly not necessary)
 
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t updatedVariables = PTHREAD_COND_INITIALIZER; // global variable to track when struct updates
 const char *debugFile = "debug.txt";
 const char *threadOutputFile = "username.txt";
-// pthread_mutex_t lock; // do not use global
 bool firstWriteDebug = true;
 bool firstWriteThreadOutput = true;
 
 const bool debugOutput = true; // flag for extra prints to file
-const bool verySlowAndVeryDetailedDebug = true;
 const bool detailedDebug = true;
-const bool doSorting = false; // may break code if enabled :) (still bugged?)
+const bool doSorting = true; // not very useful but it's here
 
 typedef struct mistake {
   unsigned int countErrors;
@@ -77,9 +76,7 @@ bool verifySortedSpellingErrors(const spellingError *arrayOfSpellingErrors, cons
 int partitionSpellingErrorArr(spellingError *arr, int start, int end);
 void quickSortSpellingErrorArr(spellingError *arr, int start, int end);
 int printToLog(const char *debugFile, const char *stringLiteral, ...);
-int partitionStr(char **arr, int start, int end);
-void quickSortStr(char ** arr, int start, int end);
-char* getNonAlphabeticalCharsString();
+char* getNonAlphabeticalCharsString(void);
 unsigned int max(unsigned int a, unsigned int b);
 unsigned int numStringMismatchesInStrings(const char *dictionaryString, const char *target);
 char* getOutputString (threadArguments threadArgsPtr);
@@ -90,3 +87,4 @@ char *generateSummary(spellingError *errorArr, unsigned int numThreads, unsigned
 int writeThreadToFile(const char *fileName, spellingError *listOfMistakes, unsigned int numElements);
 void printToOutputFile(const char *fileName, const char* stringToPrint);
 unsigned int getNumDigitsInNumber(int number, char base);
+void quicksortStrings(char **arrayofStrings, int left, int right);
