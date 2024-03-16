@@ -21,9 +21,12 @@ int main(int argc, char **argv) {
     pthread_t *threadIDs = NULL;
     unsigned int numThreadsStarted = 0;
     unsigned int numThreadsInUse = 0;
+    clock_t start_time, end_time;
+    double cpu_time_used;
     // struct for thread arguments
     threadArguments args = {0};  // set all to 0, threads will update values
     args.errorArray = NULL;
+    start_time = clock();
 main_menu:
     printf("Main Menu:\n1. Start a new spellchecking task\n2. Exit\n\n");
     printf("Select the mode of operation (1 or 2): ");
@@ -127,6 +130,9 @@ main_menu:
         case 2:
         case_2:
             // int status;
+            end_time = clock(); // Record the end time
+            cpu_time_used = ((double)(end_time - start_time)) / CLOCKS_PER_SEC;
+            printf("\n\nExecution time: %lf\n\n", cpu_time_used);
             printf("\nexiting program...\n");
             pthread_mutex_lock(&lock);
             char *outputString;

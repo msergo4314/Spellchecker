@@ -16,6 +16,7 @@
 #include <stdarg.h> // for variable # of function inputs
 // #include <omp.h> // only needed to check how many threads you have
 #include <limits.h> // needed to check chartype
+#include <time.h> // optional (for timing)
 
 
 // global variables -- many of them can be placed in the struct
