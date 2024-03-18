@@ -73,8 +73,7 @@ unsigned int min(unsigned int a, unsigned int b);
 spellingError *compareFileData(const char **dictionaryData, const char ** fileData, const unsigned int numEntriesDictionary,
 const unsigned int numEntriesInFile, unsigned int *countTotalMistakes, unsigned int *countInArr);
 void freeArrayOfSpellingErrors(spellingError **arrayOfMistakes, unsigned int countInArr);
-unsigned int numStringMismatchesInArrayOfStrings(const char **arrayOfDictionaryStrings, const char **arrayOfFileStrings,
-                                              unsigned int sizeDictionary, unsigned int sizeFile,  const char *target);
+unsigned int numStringMismatchesInArrayOfStrings(const char **arrayOfDictionaryStrings, const char **arrayOfFileStrings, unsigned int sizeDictionary, unsigned int sizeFile,  const char *target);
 bool verifySortedStr(const char ** sortedArrayOfStrings, const unsigned int numStrings);
 bool verifySortedSpellingErrors(const spellingError *arrayOfSpellingErrors, const int numElements);
 int partitionSpellingErrorArr(spellingError *arr, int start, int end);
