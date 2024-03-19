@@ -646,41 +646,12 @@ spellingError * compareFileData(const char ** dictionaryData,
   * countInArr = 0;
   spellingError * mistakesArr = NULL; // no entries yet
   unsigned int countMistakesForCurrentWord = 0;
-  // char **dictionaryCopySorted = NULL;
-  // if (doSorting) {
-  //     dictionaryCopySorted =
-  //         (char **)malloc(sizeof(char *) * numEntriesDictionary);
-  //     if (dictionaryCopySorted == NULL) {
-  //         printToLog(debugFile, "error with mallocing copy...\n");
-  //         return NULL;
-  //     }
-  //     for (int i = 0; i < numEntriesDictionary; i++) {
-  //         if (dictionaryData && dictionaryData[i] != NULL) {
-  //             dictionaryCopySorted[i] = strdup(dictionaryData[i]);
-  //             if (dictionaryCopySorted[i] == NULL) {
-  //                 printToLog(debugFile,
-  //                            "error with mallocing copy inner
-  //                            string...\n");
-  //                 while (i > 0) {
-  //                     freePointer((void **)&dictionaryCopySorted[--i]);
-  //                 }
-  //                 freePointer((void **)&dictionaryCopySorted);
-  //                 return NULL;
-  //             }
-  //         }
-  //     }
-  //     // use quicksort to make sure the dictionary is in alphabetical order
-  // }
   if (doSorting) {
     quicksortStrings((char ** ) dictionaryData, 0, numEntriesDictionary - 1);
+    if (!verifySortedStr(dictionaryData, numEntriesDictionary)) {
+      printf("Sort failed\n");
+    }
   }
-  // if (debugOutput && doSorting &&
-  //     !verifySortedStr((const char **)dictionaryCopySorted,
-  //                      numEntriesDictionary)) {
-  //     printf("sort failded\n");
-  //     free2DArray((void ***)&dictionaryCopySorted, numEntriesDictionary);
-  //     return NULL;
-  // }
   bool flag = false;
   char ** seenWords = malloc(sizeof(char * ) * numEntriesFile);
   if (!seenWords) {
@@ -703,16 +674,13 @@ spellingError * compareFileData(const char ** dictionaryData,
       continue;
     }
     seenWords[i] = strdup(fileData[i]);
-    // printf("currently i is: %d\n", i);
-    // if (!doSorting) {
-    //     dictionaryCopySorted = (char **)dictionaryData;
-    // }
-    if ((countMistakesForCurrentWord = numStringMismatchesInArrayOfStrings(
-        (const char ** ) dictionaryData, (const char ** ) fileData,
-        numEntriesDictionary, numEntriesFile, fileData[i]))) {
+    // if ((countMistakesForCurrentWord = numStringMismatchesInArrayOfStrings(
+    //     (const char ** ) dictionaryData, (const char ** ) fileData,
+    //     numEntriesDictionary, numEntriesFile, fileData[i]))) {
+      if ((countMistakesForCurrentWord = binarySearchArrayOfStrings((const char **)dictionaryData, numEntriesDictionary, (const char**)fileData, numEntriesFile, (const char *)fileData[i]))) {
       // this is when a match is NOT found...
-      // printf("Found %d misspellings of the word %s\n",
-      // countMistakesForCurrentWord, fileData[i]);
+      printf("Found %d misspellings of the word %s\n",
+      countMistakesForCurrentWord, fileData[i]);
       ( * countTotalMistakes) += countMistakesForCurrentWord;
       ( * countInArr) ++;
       mistakesArr = (spellingError * ) realloc(
@@ -730,11 +698,6 @@ spellingError * compareFileData(const char ** dictionaryData,
     }
   }
   free2DArray((void ***) & seenWords, numEntriesFile);
-  // if (doSorting) {
-  //     free2DArray((void ***)&dictionaryCopySorted, numEntriesDictionary);
-  // }
-  // quickSortSpellingErrorArr(mistakesArr, 0, (*countInArr) - 1); // arrange
-  // from lowest frequency to highest
   if (!mistakesArr) { // if there are no mistakes create the array and
     // populate it with one entry
     mistakesArr = (spellingError * ) malloc(sizeof(spellingError));
@@ -773,18 +736,38 @@ unsigned int numStringMismatchesInArrayOfStrings(
   return count; // Target string not found
 }
 
-unsigned int numStringMismatchesInStrings(const char * dictionaryString,
-  const char * target) {
-  if (!strstr(dictionaryString, target)) {
-    return 0;
-  }
-  unsigned int count = 0;
-  char * address = (char * ) dictionaryString;
-  while ((address = strstr(address, target))) {
-    count++;
-  }
-  return count; // Target string not found
+unsigned int binarySearchArrayOfStrings(const char **sortedDictionaryArrayOfStrings, unsigned int dictionarySize,
+                                        const char **arrayOfFileStrings, unsigned int fileSize, const char *target) {
+    // Binary search in the dictionary array
+    unsigned int left = 0, right = dictionarySize - 1;
+
+    while (left <= right) {
+        unsigned int mid = left + (right - left) / 2;
+        int comparison = strcmp(sortedDictionaryArrayOfStrings[mid], target);
+
+        if (comparison == 0) {
+            // Target substring exists in the dictionary, return 0
+            return 0;
+        } else if (comparison < 0) {
+            left = mid + 1; // If target is greater, ignore left half
+        } else {
+            right = mid - 1; // If target is smaller, ignore right half
+        }
+    }
+
+    // If the target substring is not found in the dictionary, count its occurrences in the file string array
+    unsigned int count = 0;
+    for (unsigned int i = 0; i < fileSize; ++i) {
+        const char *fileString = arrayOfFileStrings[i];
+        const char *substring = strstr(fileString, target);
+        while (substring != NULL) {
+            ++count;
+            substring = strstr(substring + 1, target);
+        }
+    }
+    return count;
 }
+
 
 void quicksortStrings(char ** arr, int left, int right) {
   if (left < right) {

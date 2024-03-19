@@ -30,7 +30,7 @@ bool firstWriteThreadOutput = true;
 
 const bool debugOutput = true; // flag for extra prints to file
 const bool detailedDebug = false;
-const bool doSorting = false; // not very useful but it's here. Enables/disables sorting of file array (could be useful for a binary search instead of brute force)
+const bool doSorting = true; // not very useful but it's here. Enables/disables sorting of file array (could be useful for a binary search instead of brute force)
 
 typedef struct mistake {
   unsigned int countErrors;
@@ -59,6 +59,8 @@ enum stringTypes {ALPHA_ONLY, INTEGER, FLOAT, MIXED};
 // _Atomic unsigned int numThreadsInUse;
 
 void *threadFunction(void *vargp);
+unsigned int binarySearchArrayOfStrings(const char **sortedDictionaryArrayOfStrings, unsigned int dictionarySize,
+                                        const char **arrayOfFileStrings, unsigned int fileSize, const char *target);
 int openFileForReading(char *filename);
 unsigned char validateUserInput(char *inputString);
 void printFlush(const char *string, ...);
