@@ -1128,12 +1128,11 @@ void printToOutputFile(const char * fileName,
 unsigned int getNumDigitsInNumber(int number, char base) {
   if (number == 0) {
     return 1;
-  } else {
-    int digits = 0;
-    while (number) {
-      number /= base;
-      digits++;
-    }
-    return digits;
   }
+  int digits = 0;
+  while (number) {
+    number /= base;
+    digits++;
+  }
+  return digits;
 }
