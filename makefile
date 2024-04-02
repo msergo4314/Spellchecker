@@ -5,7 +5,7 @@ CFLAGS = -Wall -std=c11 -lpthread
 
 SRCS = threads_AS.c
 OBJS = $(SRCS:.c=.o)
-EXECUTABLE = A2.exe
+EXECUTABLE = A2
 
 all: $(EXECUTABLE)
 

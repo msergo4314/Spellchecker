@@ -4,13 +4,13 @@
 #define MAX_SIZE_USERINPUT 100
 #define MAX_THREADS 16 // depends on machine so should be sure to check your machine
 #define MAX_OUTPUT_MESSAGE_SIZE 5000 // in case the filenames are really damn big
-#include <ctype.h> // tolower
+#include <ctype.h> // tolower, isalpha, etc
 #include <pthread.h> // multithreading
 #include <stdatomic.h> // for atomic values
 #include <stdbool.h>
 #include <stdio.h>
-#include <stdlib.h> // string functions (strdup, strtoui, etc.)
-#include <string.h>
+#include <stdlib.h> // malloc and free
+#include <string.h> // string functions (strdup, strtoui, etc.)
 #include <fcntl.h> // for file open/read
 #include <unistd.h>
 #include <stdarg.h> // for variable # of function inputs
@@ -30,7 +30,7 @@ bool firstWriteThreadOutput = true;
 
 const bool debugOutput = true; // flag for extra prints to file
 const bool detailedDebug = false;
-const bool doSorting = true; // not very useful but it's here. Enables/disables sorting of file array (could be useful for a binary search instead of brute force)
+const bool doSorting = false; // not very useful but it's here. Enables/disables sorting of file array (could be useful for a binary search)
 
 typedef struct mistake {
   unsigned int countErrors;
@@ -40,7 +40,7 @@ typedef struct mistake {
   unsigned int threadID;
 } spellingError;
 
-// functionally the struct is both input and output for thread functions
+// functionally this struct is both input and output for thread functions
 typedef struct threadArgs {
   char *dictionaryFileName;
   char *spellcheckFileName;
