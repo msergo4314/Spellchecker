@@ -1,9 +1,26 @@
 #include "header.h"
 
 int main(int argc, char **argv) {
-  if (pthread_mutex_init(& lock, NULL) != 0) {
+  bool l_flag = false;
+  if (pthread_mutex_init(&lock, NULL) != 0) {
     printf("\n mutex init has failed\n");
     return 1;
+  }
+  char fileNameString[MAX_FILE_NAME_LENGTH + 1] = "";
+  if (argc > 1) {
+    for(unsigned char i = 0; i < argc; i++) {
+      convertEntireStringToLower(argv[i]);
+      if (!(strcmp(argv[i], "l") || !strcmp(argv[i], "-l"))) {
+        l_flag = true;
+      }
+      else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
+        printf("Usage: spellchecker.exe {l or -l} {--help or -h} {--default}\n");
+        return 0;
+      }
+      else if (!strcmp(argv[i], "--default") || !strcmp(argv[i], "-d")) {
+        strcpy(fileNameString, "dictionary.txt"); // default dictionary (must be in pwd!)
+      }
+    }
   }
   //   code to detect how many threads you have. REQUIRES -fopenmp compilation
   //   flag
@@ -46,25 +63,25 @@ int main(int argc, char **argv) {
     // if numThreads not used, then use #define constant for max threads
     if (numThreadsInUse >= MAX_THREADS) {
       // if (numThreadsInUse >= numThreads) {
-
       printf("too many threads in use\n");
       goto case_2;
     }
-    // get dictionary to process
-    char fileNameString[MAX_FILE_NAME_LENGTH + 1];
-    printf("Enter the filename of the dictionary (or 'Q' to quit): ");
-    fgets(fileNameString, sizeof(fileNameString), stdin);
-    removeNewline(fileNameString);
     char qString[] = {'q', 0x0};
-    convertEntireStringToLower(fileNameString);
-    if (!strcmp(fileNameString, qString)) {
-      printf("Exiting...\n");
-      goto main_menu;
+    // get dictionary to process
+    if (!strcmp(fileNameString, "")) { // if fielNameString is empty then ask for dictionary
+      printf("Enter the filename of the dictionary (or 'Q' to quit): ");
+      fgets(fileNameString, sizeof(fileNameString), stdin);
+      removeNewline(fileNameString);
+      convertEntireStringToLower(fileNameString);
+      if (!strcmp(fileNameString, qString)) {
+        printf("Exiting...\n");
+        goto main_menu;
+      }
     }
     args.dictionaryFileName = strdup(fileNameString);
     if (!args.dictionaryFileName) {
       perror("Could not malloc with strdup in main. Exiting...\n");
-      pthread_mutex_destroy(& lock);
+      pthread_mutex_destroy(&lock);
       if (threadIDs) {
         free(threadIDs);
       }
@@ -80,11 +97,11 @@ int main(int argc, char **argv) {
       printf("Exiting...\n");
       goto main_menu;
     }
-    pthread_mutex_lock(& lock);
+    pthread_mutex_lock(&lock);
     args.spellcheckFileName = strdup(fileNameString);
     if (!args.dictionaryFileName) {
       perror("Could not malloc with strdup in main. Exiting...\n");
-      pthread_mutex_destroy(& lock);
+      pthread_mutex_destroy(&lock);
       free(args.dictionaryFileName);
       if (threadIDs) {
         free(threadIDs);
@@ -100,12 +117,12 @@ int main(int argc, char **argv) {
       printf("failed to realloc for threadIDs\n");
       free(args.dictionaryFileName);
       free(args.spellcheckFileName);
-      pthread_mutex_destroy(& lock);
+      pthread_mutex_destroy(&lock);
       return (EXIT_FAILURE);
     }
     printf("making thread %d\n", numThreadsStarted + 1);
     int error;
-    error = pthread_create(& (threadIDs[numThreadsStarted]), NULL,
+    error = pthread_create(&(threadIDs[numThreadsStarted]), NULL,
       threadFunction, (void *)&args);
     if (error != 0) {
       printf("Thread can't be created: %s\n", strerror(error));
@@ -115,14 +132,12 @@ int main(int argc, char **argv) {
       if (args.errorArray) {
         free(args.errorArray);
       }
-      pthread_mutex_unlock(& lock);
-      pthread_mutex_destroy(& lock);
+      pthread_mutex_unlock(&lock);
+      pthread_mutex_destroy(&lock);
       return (EXIT_FAILURE);
     }
-    pthread_mutex_lock(& lock);
-    pthread_cond_wait(&
-      updatedVariables, &
-      lock); // make sure the variables have been updated
+    pthread_mutex_lock(&lock);
+    pthread_cond_wait(&updatedVariables, &lock); // make sure the variables have been updated
     numThreadsInUse = args.numThreadsInUse;
     numThreadsStarted = args.numThreadsStarted;
     pthread_mutex_unlock(&lock);
@@ -131,7 +146,7 @@ int main(int argc, char **argv) {
     case_2:
       // int status;
     printf("\nexiting program...\n");
-    pthread_mutex_lock(& lock);
+    pthread_mutex_lock(&lock);
     char *outputString;
     unsigned int numThreadsFinished = args.numThreadsFinished;
     numThreadsStarted = args.numThreadsStarted;
@@ -139,32 +154,27 @@ int main(int argc, char **argv) {
     printf("Number of threads started: %d\n", numThreadsStarted);
     printf("%d threads finished execution\n", numThreadsFinished);
     printf("%d threads running currently\n", numThreadsInUse);
-    pthread_mutex_unlock(& lock);
+    pthread_mutex_unlock(&lock);
     if (threadIDs) {
       for (int i = 0; i < numThreadsStarted; i++) {
-        printf("waiting for thread #%d (ID = %lu)\n", i + 1,
-          threadIDs[i]);
-        // pthread_mutex_lock(&lock);
+        printf("waiting for thread #%d (ID = %lu)\n", i + 1, threadIDs[i]);
         // printf("there are %d threads running currently\n",
         // args.numThreadsInUse); pthread_mutex_unlock(&lock);
         pthread_join(threadIDs[i], NULL);
       }
       printf("All threads finished\n");
       outputString = getOutputString(args); // pass in thread struct
-      freeArrayOfSpellingErrors(& (args.errorArray), args.prevSize);
+      freeArrayOfSpellingErrors(&(args.errorArray), args.prevSize);
       free(threadIDs);
-      if (argc > 1) {
-        char *firstArg = argv[1];
-        convertEntireStringToLower(firstArg);
-        if (!strcmp(firstArg, "l")) {
-          printToOutputFile(threadOutputFile, outputString);
-        }
-      } else {
+      if (l_flag) {
+        printToOutputFile(threadOutputFile, outputString);
+      }
+      else {
         printf("\n%s\n", outputString);
       }
       free(outputString);
     }
-    pthread_mutex_destroy(& lock);
+    pthread_mutex_destroy(&lock);
     end_time = clock(); // Record the end time
     cpu_time_used = ((double)(end_time - start_time)) / CLOCKS_PER_SEC;
     printf("\n\nExecution time: %lf\n\n", cpu_time_used);
@@ -177,7 +187,7 @@ int main(int argc, char **argv) {
 
 void *threadFunction(void *vargp) {
   threadArguments *data = (threadArguments *) vargp;
-  pthread_mutex_lock(& lock); // immediately lock mutex to update variables
+  pthread_mutex_lock(&lock); // immediately lock mutex to update variables
   data -> numThreadsInUse++;
   unsigned int threadID = data -> numThreadsStarted;
   data -> numThreadsStarted++;
@@ -189,7 +199,7 @@ void *threadFunction(void *vargp) {
   pthread_cond_signal(&
     updatedVariables); // will notify the main thread that struct has been
   // updated to prevent invalid reads
-  pthread_mutex_unlock(& lock);
+  pthread_mutex_unlock(&lock);
 
   if (debugOutput) {
     printToLog(debugFile, "attempting to read file %s\n",
@@ -242,14 +252,14 @@ void *threadFunction(void *vargp) {
   }
   if (wordCountDictionary < 1 || wordCountFile < 1) {
     exit_failure:
-    pthread_mutex_lock(& lock);
+    pthread_mutex_lock(&lock);
     free(data -> dictionaryFileName);
     free(data -> spellcheckFileName);
     free2DArray((void ***)&fileArrayOfStrings, wordCountFile);
     free2DArray((void ***)&dictionaryArrayOfStrings, wordCountDictionary);
     data -> numThreadsFinished++;
     data -> numThreadsInUse--;
-    pthread_mutex_unlock(& lock);
+    pthread_mutex_unlock(&lock);
     return NULL;
   }
 
@@ -263,13 +273,13 @@ void *threadFunction(void *vargp) {
   if (debugOutput) {
     printToLog(debugFile, "\nExited comparison\n");
   }
-  pthread_mutex_lock(& lock);
+  pthread_mutex_lock(&lock);
   unsigned int previousSize = data -> prevSize;
   unsigned int newSize = countInArr + previousSize;
   data -> errorArray =
     realloc(data -> errorArray, sizeof(spellingError) *newSize);
   data -> prevSize = newSize;
-  pthread_mutex_unlock(& lock);
+  pthread_mutex_unlock(&lock);
   for (int i = 0; i < countInArr; i++) {
     mistakes[i].threadID = threadID;
     mistakes[i].dictionaryName = strdup(dictionaryFileName);
@@ -281,13 +291,13 @@ void *threadFunction(void *vargp) {
       goto exit_failure;
     }
   }
-  pthread_mutex_lock(& lock);
+  pthread_mutex_lock(&lock);
   int numIterations = 0;
   for (int i = previousSize; i < countInArr + previousSize; i++) {
-    memcpy(& (data -> errorArray[i]), &(mistakes[numIterations++]),
+    memcpy(&(data -> errorArray[i]), &(mistakes[numIterations++]),
       sizeof(spellingError));
   }
-  pthread_mutex_unlock(& lock);
+  pthread_mutex_unlock(&lock);
   quickSortSpellingErrorArr(mistakes, 0, countInArr - 1); // sort high to low
   // do file IO with sorted results
   if (writeThreadToFile(threadOutputFile, mistakes, countInArr)) {
@@ -298,14 +308,14 @@ void *threadFunction(void *vargp) {
     goto exit_failure;
   }
   // exit success
-  pthread_mutex_lock(& lock);
+  pthread_mutex_lock(&lock);
   free(data -> dictionaryFileName);
   free(data -> spellcheckFileName);
   free(mistakes);
   data -> numThreadsInUse--;
   data -> threadSucccessCount++;
   data -> numThreadsFinished++;
-  pthread_mutex_unlock(& lock);
+  pthread_mutex_unlock(&lock);
   // thread status already set to 0
   return NULL;
 }
@@ -364,9 +374,9 @@ int writeThreadToFile(const char *fileName, spellingError *listOfMistakes,
   }
   // Write the formatted string
   printToLog(debugFile, "attempting to write to output file string %s\n", str);
-  pthread_mutex_lock(& lock);
+  pthread_mutex_lock(&lock);
   printToOutputFile(fileName, str);
-  pthread_mutex_unlock(& lock);
+  pthread_mutex_unlock(&lock);
   free(str);
   return 0; // Success
 }
@@ -818,7 +828,7 @@ bool verifySortedSpellingErrors(const spellingError *arrayOfSpellingErrors,
 
 int printToLog(const char *debugFile,
   const char *stringLiteral, ...) {
-  pthread_mutex_lock(& lock);
+  pthread_mutex_lock(&lock);
   va_list args;
   va_start(args, stringLiteral);
   va_end(args);
@@ -828,14 +838,14 @@ int printToLog(const char *debugFile,
   if (firstWriteDebug) {
     if ((fd = open(debugFile, O_CREAT | O_WRONLY | O_TRUNC, 0644)) == -1) {
       perror("Error opening debug file");
-      pthread_mutex_unlock(& lock);
+      pthread_mutex_unlock(&lock);
       return -1;
     }
     firstWriteDebug = false;
   } else {
     if ((fd = open(debugFile, O_CREAT | O_WRONLY | O_APPEND, 0644)) == -1) {
       perror("Error opening debug file");
-      pthread_mutex_unlock(& lock);
+      pthread_mutex_unlock(&lock);
       return -1;
     }
   }
@@ -843,16 +853,16 @@ int printToLog(const char *debugFile,
   if (vdprintf(fd, stringLiteral, args) == -1) {
     perror("Error writing to debug file");
     close(fd);
-    pthread_mutex_unlock(& lock);
+    pthread_mutex_unlock(&lock);
     return -1;
   }
   // Close the file descriptor
   if (close(fd) == -1) {
     perror("Error closing debug file");
-    pthread_mutex_unlock(& lock);
+    pthread_mutex_unlock(&lock);
     return -1;
   }
-  pthread_mutex_unlock(& lock);
+  pthread_mutex_unlock(&lock);
   return 0; // Success
 }
 

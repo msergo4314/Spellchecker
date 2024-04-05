@@ -3,9 +3,9 @@ CC = gcc
 CFLAGS = -Wall -std=c11 -lpthread
 # CFLAGS = -O3 -Wall-g -std=c11 -lpthread # agressively optimized by the compiler
 
-SRCS = threads_AS.c
+SRCS = spellchecker.c
 OBJS = $(SRCS:.c=.o)
-EXECUTABLE = A2
+EXECUTABLE = spellchecker.exe
 
 all: $(EXECUTABLE)
 
@@ -15,4 +15,4 @@ $(EXECUTABLE): $(OBJS)
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 clean:
-	rm *.o $(EXECUTABLE).exe
+	rm -f *.o $(EXECUTABLE) debug.txt username.out
