@@ -196,8 +196,7 @@ void *threadFunction(void *vargp) {
   // printFlush("Thread ID: %d\n", pthread_self());
   char **fileArrayOfStrings = NULL;
   char **dictionaryArrayOfStrings = NULL;
-  pthread_cond_signal(&
-    updatedVariables); // will notify the main thread that struct has been
+  pthread_cond_signal(&updatedVariables); // will notify the main thread that struct has been
   // updated to prevent invalid reads
   pthread_mutex_unlock(&lock);
 
@@ -212,8 +211,9 @@ void *threadFunction(void *vargp) {
   dictionaryArrayOfStrings =
     readFileArray(dictionaryFileName, &wordCountDictionary);
   if (!dictionaryArrayOfStrings) {
-    printToLog(debugFile,
-      "Reading words array from dictionary file failed!\n");
+    if (debugOutput) {
+      printToLog(debugFile, "Reading words array from dictionary file failed!\n");
+    }
     goto exit_failure;
   }
   if (debugOutput) {
@@ -238,7 +238,9 @@ void *threadFunction(void *vargp) {
   unsigned int wordCountFile = 0;
   fileArrayOfStrings = readFileArray(spellcheckFileName, &wordCountFile);
   if (fileArrayOfStrings == NULL) {
-    printToLog(debugFile, "Reading words array from file failed!\n");
+    if (debugOutput) {
+      printToLog(debugFile, "Reading words array from file failed!\n");
+    }
     goto exit_failure;
   }
   if (debugOutput) { // this is very slow so prepare to wait
@@ -276,8 +278,7 @@ void *threadFunction(void *vargp) {
   pthread_mutex_lock(&lock);
   unsigned int previousSize = data -> prevSize;
   unsigned int newSize = countInArr + previousSize;
-  data -> errorArray =
-    realloc(data -> errorArray, sizeof(spellingError) *newSize);
+  data -> errorArray = realloc(data -> errorArray, sizeof(spellingError) * newSize);
   data -> prevSize = newSize;
   pthread_mutex_unlock(&lock);
   for (int i = 0; i < countInArr; i++) {
@@ -286,24 +287,20 @@ void *threadFunction(void *vargp) {
     mistakes[i].fileName = strdup(spellcheckFileName);
     if (!mistakes[i].fileName || !mistakes[i].dictionaryName) {
       perror("strdup malloc failed!\n");
-      freeArrayOfSpellingErrors((spellingError **)&mistakes,
-        data -> prevSize + countInArr);
+      freeArrayOfSpellingErrors(&mistakes, data -> prevSize); // prevsize now updated
       goto exit_failure;
     }
   }
   pthread_mutex_lock(&lock);
-  int numIterations = 0;
-  for (int i = previousSize; i < countInArr + previousSize; i++) {
-    memcpy(&(data -> errorArray[i]), &(mistakes[numIterations++]),
-      sizeof(spellingError));
+  unsigned int numIterations = 0;
+  for (unsigned int i = previousSize; i < countInArr + previousSize; i++) { // can also use data->prevSize for loop condition
+    memcpy(&(data -> errorArray[i]), &(mistakes[numIterations++]), sizeof(spellingError));
   }
   pthread_mutex_unlock(&lock);
   quickSortSpellingErrorArr(mistakes, 0, countInArr - 1); // sort high to low
   // do file IO with sorted results
   if (writeThreadToFile(threadOutputFile, mistakes, countInArr)) {
-    fprintf(stderr,
-      "error with logging output of thread analysis to file %s!\n",
-      threadOutputFile);
+    fprintf(stderr, "error with logging output of thread analysis to file %s!\n", threadOutputFile);
     free(mistakes);
     goto exit_failure;
   }
@@ -316,12 +313,10 @@ void *threadFunction(void *vargp) {
   data -> threadSucccessCount++;
   data -> numThreadsFinished++;
   pthread_mutex_unlock(&lock);
-  // thread status already set to 0
   return NULL;
 }
 
-int writeThreadToFile(const char *fileName, spellingError *listOfMistakes,
-  unsigned int numElements) {
+int writeThreadToFile(const char *fileName, spellingError *listOfMistakes, unsigned int numElements) {
 
   if (!fileName) {
     perror("invalid file name given\n");
@@ -339,8 +334,9 @@ int writeThreadToFile(const char *fileName, spellingError *listOfMistakes,
   for (int i = 0; i < numElements; i++) {
     totalErrors += listOfMistakes[i].countErrors;
   }
-  printToLog(debugFile, "total errors for file %s: %d\n", currentFileName,
-    totalErrors);
+  if (debugOutput) {
+    printToLog(debugFile, "total errors for file %s: %d\n", currentFileName, totalErrors);
+  }
   size_t strSize = strlen(currentFileName) + getNumDigitsInNumber(totalErrors, 10) + 3; // extra 3 for two spaces and \0
   str = malloc(strSize);
   str[0] = '\0';
@@ -351,7 +347,9 @@ int writeThreadToFile(const char *fileName, spellingError *listOfMistakes,
   snprintf(str, strSize, "%s %d ", currentFileName, totalErrors); // first comes the filename itself
   char *tempString = NULL;
   for (int i = 0; i < numElements; i++) {
-    printToLog(debugFile, "string: %s\n", str);
+    if (debugOutput) {
+      printToLog(debugFile, "string: %s\n", str);
+    }
     if ((tempString = listOfMistakes[i].misspelledString)) { // it is possible that there are no
       str = realloc(str, strlen(str) + strlen(tempString) + 2); // 2 chars extra -- \0 and space/newline
       if (str == NULL) {
@@ -364,16 +362,15 @@ int writeThreadToFile(const char *fileName, spellingError *listOfMistakes,
       } else {
         strcat(str, "\n"); // ending newline
       }
-    } else {
+    } else if (debugOutput) {
       // should not happen
-      printToLog(debugFile,
-        "mistake misspelled string at index %d for file %s "
-        "is NULL\n",
-        i, currentFileName);
+      printToLog(debugFile, "mistake misspelled string at index %d for file %s is NULL\n", i, currentFileName);
     }
   }
   // Write the formatted string
-  printToLog(debugFile, "attempting to write to output file string %s\n", str);
+  if (debugOutput) {
+    printToLog(debugFile, "attempting to write to output file string %s\n", str);
+  }
   pthread_mutex_lock(&lock);
   printToOutputFile(fileName, str);
   pthread_mutex_unlock(&lock);
@@ -551,19 +548,19 @@ char **splitStringOnWhiteSpace(const char *inputString,
   // Allocate memory for array of strings
   char **words = (char **) malloc((* wordCount) *sizeof(char *));
   if (words == NULL) {
-    printToLog(debugFile, "Memory allocation failed for words arr\n");
-    return NULL;
-  } else {
-    for (int i = 0; i < *wordCount; i++) {
-      words[i] = NULL; // useful if words is freed before the inner
-      // pointers are set
+    if (debugOutput) {
+      printToLog(debugFile, "Memory allocation failed for words arr\n");
     }
+    return NULL;
+  }
+  for (int i = 0; i < *wordCount; i++) {
+    words[i] = NULL; // useful if words is freed before the inner ptrs are set
   }
   const char *delimiters = getNonAlphabeticalCharsString();
   if (!delimiters) {
-    printToLog(debugFile,
-      "Delimiters were not created properly inside "
-      "splitStringOnWhitespace\n");
+    if (debugOutput) {
+      printToLog(debugFile, "Delimiters were not created properly inside splitStringOnWhitespace\n");
+    }
     free2DArray((void ***)&words, *wordCount);
     return NULL;
   }
@@ -573,9 +570,9 @@ char **splitStringOnWhiteSpace(const char *inputString,
   while (token != NULL && index < *wordCount) {
     words[index] = strdup(token); // Allocate memory for each word
     if (words[index] == NULL) {
-      printToLog(
-        debugFile,
-        "Memory allocation failed for strdup inside splitOnWhitespace");
+      if (debugOutput) {
+        printToLog(debugFile, "Memory allocation failed for strdup inside splitOnWhitespace");
+      }
       free2DArray((void ***)&words, index);
       return NULL;
     }
@@ -630,7 +627,9 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
   bool flag = false;
   char **seenWords = malloc(sizeof(char *) *numEntriesFile);
   if (!seenWords) {
-    printToLog(debugFile, "failed malloc\n");
+    if (debugOutput) {
+      printToLog(debugFile, "failed malloc\n");
+    }
     return NULL;
   }
   for (int i = 0; i < numEntriesFile; i++) {
@@ -668,7 +667,11 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
       mistakesArr[temp].dictionaryName = NULL;
       mistakesArr[temp].fileName = NULL;
       if (mistakesArr[temp].misspelledString == NULL) {
-        printToLog(debugFile, "error with malloc for strdup\n");
+        if (debugOutput) {
+          printToLog(debugFile, "error with malloc for strdup\n");
+        } else {
+          printf("error with malloc for strdup\n");
+        }
         return NULL;
       }
     }
@@ -826,8 +829,7 @@ bool verifySortedSpellingErrors(const spellingError *arrayOfSpellingErrors,
   return true;
 }
 
-int printToLog(const char *debugFile,
-  const char *stringLiteral, ...) {
+int printToLog(const char *debugFile, const char *stringLiteral, ...) {
   pthread_mutex_lock(&lock);
   va_list args;
   va_start(args, stringLiteral);
@@ -922,8 +924,9 @@ char *getOutputString(threadArguments threadArgs) {
   for (unsigned int i = 0; i < numThreads; i++) {
     errorsInEachFile[i] = NULL;
     numUniqueMisspelledWords[i] = countMistakesForThread(threadArgs.errorArray, size, i);
-    printToLog(debugFile, "number of unique errors for thread %d: %d\n",
-      i + 1, numUniqueMisspelledWords[i]);
+    if (debugOutput) {
+      printToLog(debugFile, "number of unique errors for thread %d: %d\n", i + 1, numUniqueMisspelledWords[i]);
+    }
   }
   const char *fileName = NULL, *mistake = NULL;
   unsigned int arrSize;
