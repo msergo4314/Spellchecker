@@ -28,7 +28,7 @@ const char *threadOutputFile = "username.out";
 bool firstWriteDebug = true;
 bool firstWriteThreadOutput = true;
 
-const bool debugOutput = false; // flag for extra prints to file
+const bool debugOutput = true; // flag for extra prints to file
 const bool detailedDebug = false;
 // const bool doSorting = false; // not very useful but it's here. Enables/disables sorting of file array (could be useful for a binary search)
 

@@ -1,7 +1,7 @@
 #include "header.h"
 
 int main(int argc, char **argv) {
-  bool l_flag = false;
+  bool l_flag = false, defaultMode = false;
   if (pthread_mutex_init(&lock, NULL) != 0) {
     printf("\n mutex init has failed\n");
     return 1;
@@ -19,6 +19,7 @@ int main(int argc, char **argv) {
       }
       else if (!strcmp(argv[i], "--default") || !strcmp(argv[i], "-d")) {
         strcpy(fileNameString, "dictionary.txt"); // default dictionary (must be in pwd!)
+        defaultMode = true;
       }
     }
   }
@@ -63,20 +64,24 @@ int main(int argc, char **argv) {
     // if numThreads not used, then use #define constant for max threads
     if (numThreadsInUse >= MAX_THREADS) {
       // if (numThreadsInUse >= numThreads) {
-      printf("too many threads in use\n");
+      fprintf(stderr, "too many threads in use\n");
       goto case_2;
     }
     char qString[] = "q";
+    char *fileNameStringCopy = NULL;
     // get dictionary to process
-    if (!strcmp(fileNameString, "")) { // if fielNameString is empty then ask for dictionary
+    if (!defaultMode) { // if fielNameString is empty then ask for dictionary
       printf("Enter the filename of the dictionary (or 'Q' to quit): ");
       fgets(fileNameString, sizeof(fileNameString), stdin);
       removeNewline(fileNameString);
-      convertEntireStringToLower(fileNameString);
-      if (!strcmp(fileNameString, qString)) {
+      fileNameStringCopy = strdup(fileNameString);
+      convertEntireStringToLower(fileNameStringCopy);
+      if (!strcmp(fileNameStringCopy, qString)) {
+        free(fileNameStringCopy);
         printf("Exiting...\n");
         goto main_menu;
       }
+      free(fileNameStringCopy);
     }
     args.dictionaryFileName = strdup(fileNameString);
     if (args.dictionaryFileName == NULL) {
@@ -90,17 +95,19 @@ int main(int argc, char **argv) {
     printf("Enter the filename of the input file (or 'Q' to quit): ");
     fgets(fileNameString, sizeof(fileNameString), stdin);
     removeNewline(fileNameString);
-    convertEntireStringToLower(fileNameString);
+    fileNameStringCopy = strdup(fileNameString);
+    convertEntireStringToLower(fileNameStringCopy);
     if (!strcmp(fileNameString, qString)) {
+      free(fileNameStringCopy);
       free(args.dictionaryFileName);
       printf("Exiting...\n");
       goto main_menu;
     }
+    free(fileNameStringCopy);
     pthread_mutex_lock(&lock);
-    printf("%s\n", fileNameString);
-    freePointer((void **)&(args.spellcheckFileName));
+    // freePointer((void **)&(args.spellcheckFileName));
     args.spellcheckFileName = strdup(fileNameString);
-    if (!args.dictionaryFileName) {
+    if (!args.spellcheckFileName) {
       perror("Could not malloc with strdup in main (input file strdup failure). Exiting...\n");
       pthread_mutex_destroy(&lock);
       freePointer((void **)&threadIDs);
@@ -295,7 +302,6 @@ void *threadFunction(void *vargp) {
 }
 
 int writeThreadToFile(const char *fileName, spellingError *listOfMistakes, unsigned int numElements) {
-
   if (!fileName) {
     perror("invalid file name given\n");
     return FAILURE;
@@ -337,11 +343,11 @@ int writeThreadToFile(const char *fileName, spellingError *listOfMistakes, unsig
         strcat(str, "\n"); // ending newline
       }
     }
-    else {
-      if (printToLog(debugFile, "mistake misspelled string at index %d for file %s is NULL\n", i, currentFileName) == ALTERNATE_SUCCESS) {
-        fprintf(stderr, "mistake misspelled string at index %d for file %s is NULL\n", i, currentFileName);
-      }
-    }
+    // else {
+    //   if (printToLog(debugFile, "mistake misspelled string at index %d for file %s is NULL\n", i, currentFileName) == ALTERNATE_SUCCESS) {
+    //     fprintf(stderr, "mistake misspelled string at index %d for file %s is NULL\n", i, currentFileName);
+    //   }
+    // }
   }
   // Write the formatted string
   printToLog(debugFile, "attempting to write to output file string %s\n", str);
