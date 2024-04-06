@@ -52,7 +52,8 @@ typedef struct threadArgs {
   unsigned int numThreadsInUse;
 } threadArguments;
 
-enum stringTypes {ALPHA_ONLY, INTEGER, FLOAT, MIXED};
+enum StringTypes {ALPHA_ONLY, INTEGER, FLOAT, MIXED};
+enum ReturnTypes {FAILURE = EXIT_FAILURE, SUCCESS = EXIT_SUCCESS, ALTERNATE_SUCCESS = -1};
 
 // _Atomic unsigned int numThreadsStarted; // atomic varaibles are also an option if you don't want to use mutexes (but can't be used for everything anyway)
 // _Atomic unsigned int numThreadsFinished;
@@ -71,19 +72,18 @@ char** splitStringOnWhiteSpace(const char* inputString,unsigned int* wordCount);
 char **readFileArray(const char *fileName, unsigned int *wordCount);
 void free2DArray(void ***addressOfGenericPointer, int numberOfInnerElements);
 void freePointer(void **addressOfGenericPointer);
-unsigned int min(unsigned int a, unsigned int b);
 spellingError *compareFileData(const char **dictionaryData, const char ** fileData, const unsigned int numEntriesDictionary,
 const unsigned int numEntriesInFile, unsigned int *countTotalMistakes, unsigned int *countInArr);
 void freeArrayOfSpellingErrors(spellingError **arrayOfMistakes, unsigned int countInArr);
 unsigned int numStringMismatchesInArrayOfStrings(const char **arrayOfDictionaryStrings, const char **arrayOfFileStrings, unsigned int sizeDictionary, unsigned int sizeFile,  const char *target);
 bool verifySortedStr(const char ** sortedArrayOfStrings, const unsigned int numStrings);
-bool verifySortedSpellingErrors(const spellingError *arrayOfSpellingErrors, const int numElements);
+// bool verifySortedSpellingErrors(const spellingError *arrayOfSpellingErrors, const int numElements);
 int partitionSpellingErrorArr(spellingError *arr, int start, int end);
 void quickSortSpellingErrorArr(spellingError *arr, int start, int end);
 int printToLog(const char *debugFile, const char *stringLiteral, ...);
 char* getNonAlphabeticalCharsString(void);
 unsigned int max(unsigned int a, unsigned int b);
-unsigned int numStringMismatchesInStrings(const char *dictionaryString, const char *target);
+// unsigned int numStringMismatchesInStrings(const char *dictionaryString, const char *target);
 char* getOutputString (threadArguments threadArgsPtr);
 unsigned int countMistakesForThread(spellingError *errorArr, unsigned int numEntriesInArr, int index);
 const char *getFileNameFromThreadID(spellingError *arr, int index, unsigned int numElements);
@@ -91,5 +91,5 @@ const char *getMistakeAtIndex(spellingError *arr, int threadNum, int index, unsi
 char *generateSummary(spellingError *errorArr, unsigned int numThreads, unsigned int arrayLength, char *inputString, unsigned int numSuccessfulThreads);
 int writeThreadToFile(const char *fileName, spellingError *listOfMistakes, unsigned int numElements);
 void printToOutputFile(const char *fileName, const char* stringToPrint);
-unsigned int getNumDigitsInNumber(int number, char base);
+unsigned int getNumDigitsInNumber(int number, unsigned char base);
 void quicksortStrings(char **arrayofStrings, int left, int right);

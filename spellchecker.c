@@ -14,8 +14,8 @@ int main(int argc, char **argv) {
         l_flag = true;
       }
       else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
-        printf("Usage: spellchecker.exe {l or -l} {--help or -h} {--default}\n");
-        return 0;
+        printf("Usage: spellchecker.exe {l or -l} {--help or -h} {--default or -d}\n");
+        return ALTERNATE_SUCCESS;
       }
       else if (!strcmp(argv[i], "--default") || !strcmp(argv[i], "-d")) {
         strcpy(fileNameString, "dictionary.txt"); // default dictionary (must be in pwd!)
@@ -52,9 +52,9 @@ int main(int argc, char **argv) {
   unsigned char x;
   while ((x = validateUserInput(userInput)) != INTEGER) {
     input_loop:
-      // printf("Invalid. You entered a string of type %s. Try again: ",
-      // returnTypeStrings[x]);
-      printf("Invalid. Enter integer between 1 and 2: ");
+    // printf("Invalid. You entered a string of type %s. Try again: ",
+    // returnTypeStrings[x]);
+    printf("Invalid. Enter integer between 1 and 2: ");
     fgets(userInput, sizeof(userInput), stdin);
   }
   unsigned char selection = (unsigned char) strtoul(userInput, NULL, 10);
@@ -66,7 +66,7 @@ int main(int argc, char **argv) {
       printf("too many threads in use\n");
       goto case_2;
     }
-    char qString[] = {'q', 0x0};
+    char qString[] = "q";
     // get dictionary to process
     if (!strcmp(fileNameString, "")) { // if fielNameString is empty then ask for dictionary
       printf("Enter the filename of the dictionary (or 'Q' to quit): ");
@@ -79,13 +79,12 @@ int main(int argc, char **argv) {
       }
     }
     args.dictionaryFileName = strdup(fileNameString);
-    if (!args.dictionaryFileName) {
+    if (args.dictionaryFileName == NULL) {
       perror("Could not malloc with strdup in main. Exiting...\n");
       pthread_mutex_destroy(&lock);
-      if (threadIDs) {
-        free(threadIDs);
-      }
-      return (EXIT_FAILURE);
+      freePointer((void **)&threadIDs);
+      freeArrayOfSpellingErrors(&(args.errorArray), args.prevSize);
+      return FAILURE;
     }
     // get file to process
     printf("Enter the filename of the input file (or 'Q' to quit): ");
@@ -98,32 +97,28 @@ int main(int argc, char **argv) {
       goto main_menu;
     }
     pthread_mutex_lock(&lock);
+    printf("%s\n", fileNameString);
+    freePointer((void **)&(args.spellcheckFileName));
     args.spellcheckFileName = strdup(fileNameString);
     if (!args.dictionaryFileName) {
-      perror("Could not malloc with strdup in main. Exiting...\n");
+      perror("Could not malloc with strdup in main (input file strdup failure). Exiting...\n");
       pthread_mutex_destroy(&lock);
-      free(args.dictionaryFileName);
-      if (threadIDs) {
-        free(threadIDs);
-      }
-      return (EXIT_FAILURE);
+      freePointer((void **)&threadIDs);
+      freeArrayOfSpellingErrors(&(args.errorArray), args.prevSize);
+      return (FAILURE);
     }
     pthread_mutex_unlock(&lock);
-    threadIDs = (pthread_t *) realloc(
-      threadIDs, (sizeof(pthread_t) *(numThreadsStarted + 1)));
-    threadIDs[numThreadsStarted] = 0;
-
+    threadIDs = (pthread_t *) realloc( threadIDs, (sizeof(pthread_t) *(numThreadsStarted + 1)));
     if (!threadIDs) {
       printf("failed to realloc for threadIDs\n");
       free(args.dictionaryFileName);
       free(args.spellcheckFileName);
       pthread_mutex_destroy(&lock);
-      return (EXIT_FAILURE);
+      return FAILURE;
     }
-    printf("making thread %d\n", numThreadsStarted + 1);
-    int error;
-    error = pthread_create(&(threadIDs[numThreadsStarted]), NULL,
-      threadFunction, (void *)&args);
+    threadIDs[numThreadsStarted] = 0;
+    // printf("making thread %d\n", numThreadsStarted + 1);
+    int error = pthread_create(&(threadIDs[numThreadsStarted]), NULL, threadFunction, (void *)&args);
     if (error != 0) {
       printf("Thread can't be created: %s\n", strerror(error));
       free(args.dictionaryFileName);
@@ -134,7 +129,7 @@ int main(int argc, char **argv) {
       }
       pthread_mutex_unlock(&lock);
       pthread_mutex_destroy(&lock);
-      return (EXIT_FAILURE);
+      return FAILURE;
     }
     pthread_mutex_lock(&lock);
     pthread_cond_wait(&updatedVariables, &lock); // make sure the variables have been updated
@@ -178,7 +173,7 @@ int main(int argc, char **argv) {
     end_time = clock(); // Record the end time
     cpu_time_used = ((double)(end_time - start_time)) / CLOCKS_PER_SEC;
     printf("\n\nExecution time: %lf\n\n", cpu_time_used);
-    return (EXIT_SUCCESS); // do not need break since end of main
+    return SUCCESS; // do not need break since end of main
   default:
     printf("not valid. Try again\n");
     goto input_loop;
@@ -200,63 +195,48 @@ void *threadFunction(void *vargp) {
   // updated to prevent invalid reads
   pthread_mutex_unlock(&lock);
 
-  if (debugOutput) {
-    printToLog(debugFile, "attempting to read file %s\n",
-      dictionaryFileName);
-    if (detailedDebug) {
-      printToLog(debugFile, "split file is:\n\n");
-    }
+  printToLog(debugFile, "attempting to read file %s\n", dictionaryFileName);
+  if (detailedDebug) {
+    printToLog(debugFile, "split file is:\n\n");
   }
   unsigned int wordCountDictionary = 0;
-  dictionaryArrayOfStrings =
-    readFileArray(dictionaryFileName, &wordCountDictionary);
-  if (!dictionaryArrayOfStrings) {
-    if (debugOutput) {
-      printToLog(debugFile, "Reading words array from dictionary file failed!\n");
-    }
+  dictionaryArrayOfStrings = readFileArray(dictionaryFileName, &wordCountDictionary);
+  if (!dictionaryArrayOfStrings) { 
+    // fprintf(stderr, "Reading words array from dictionary file failed!\n");
     goto exit_failure;
   }
-  if (debugOutput) {
-    printToLog(debugFile, "wordcount is: %d\n", wordCountDictionary);
-    if (detailedDebug) {
-      unsigned int x;
-      char *y = readEntireFileIntoStr(dictionaryFileName, &x);
-      printToLog(debugFile, "%s\n", y);
-      free(y);
-    }
+  printToLog(debugFile, "wordcount is: %d\n", wordCountDictionary);
+  if (detailedDebug) {
+    unsigned int x;
+    char *y = readEntireFileIntoStr(dictionaryFileName, &x);
+    printToLog(debugFile, "%s\n", y);
+    free(y);
   }
 
   /*****************************SECOND FILE******************************/
 
-  if (debugOutput) {
-    printToLog(debugFile, "\nattempting to read file %s\n",
-      spellcheckFileName);
-    if (detailedDebug) {
-      printToLog(debugFile, "split file is:\n\n");
-    }
+  printToLog(debugFile, "\nattempting to read file %s\n", spellcheckFileName);
+  if (detailedDebug) {
+    printToLog(debugFile, "split file is:\n\n");
   }
   unsigned int wordCountFile = 0;
   fileArrayOfStrings = readFileArray(spellcheckFileName, &wordCountFile);
   if (fileArrayOfStrings == NULL) {
-    if (debugOutput) {
-      printToLog(debugFile, "Reading words array from file failed!\n");
-    }
+    // fprintf(stderr, "Reading words array from file failed!\n"); 
     goto exit_failure;
   }
-  if (debugOutput) { // this is very slow so prepare to wait
-    printToLog(debugFile, "word count is: %d\n", wordCountFile);
-    if (detailedDebug) {
-      unsigned int x;
-      char *y = readEntireFileIntoStr(spellcheckFileName, &x);
-      printToLog(debugFile, "%s\n", y);
-      free(y);
-    }
+  printToLog(debugFile, "word count is: %d\n", wordCountFile);
+  if (detailedDebug) {
+    unsigned int x;
+    char *y = readEntireFileIntoStr(spellcheckFileName, &x);
+    printToLog(debugFile, "%s\n", y);
+    free(y);
   }
   if (wordCountDictionary < 1 || wordCountFile < 1) {
     exit_failure:
     pthread_mutex_lock(&lock);
-    free(data -> dictionaryFileName);
-    free(data -> spellcheckFileName);
+    freePointer((void **)&(data -> dictionaryFileName));
+    freePointer((void **)&(data -> spellcheckFileName));
     free2DArray((void ***)&fileArrayOfStrings, wordCountFile);
     free2DArray((void ***)&dictionaryArrayOfStrings, wordCountDictionary);
     data -> numThreadsFinished++;
@@ -267,14 +247,12 @@ void *threadFunction(void *vargp) {
 
   unsigned int countTotalMistakes, countInArr;
   spellingError *mistakes = compareFileData((const char **) dictionaryArrayOfStrings,
-      (const char **) fileArrayOfStrings, wordCountDictionary,
-      wordCountFile, &countTotalMistakes, &countInArr);
+    (const char **) fileArrayOfStrings, wordCountDictionary,
+    wordCountFile, &countTotalMistakes, &countInArr);
   free2DArray((void ***)&fileArrayOfStrings, wordCountFile);
   free2DArray((void ***)&dictionaryArrayOfStrings, wordCountDictionary);
   // should ALWAYS return valid pointer
-  if (debugOutput) {
-    printToLog(debugFile, "\nExited comparison\n");
-  }
+  
   pthread_mutex_lock(&lock);
   unsigned int previousSize = data -> prevSize;
   unsigned int newSize = countInArr + previousSize;
@@ -299,15 +277,15 @@ void *threadFunction(void *vargp) {
   pthread_mutex_unlock(&lock);
   quickSortSpellingErrorArr(mistakes, 0, countInArr - 1); // sort high to low
   // do file IO with sorted results
-  if (writeThreadToFile(threadOutputFile, mistakes, countInArr)) {
+  if (writeThreadToFile(threadOutputFile, mistakes, countInArr) == FAILURE) {
     fprintf(stderr, "error with logging output of thread analysis to file %s!\n", threadOutputFile);
     free(mistakes);
     goto exit_failure;
   }
   // exit success
   pthread_mutex_lock(&lock);
-  free(data -> dictionaryFileName);
-  free(data -> spellcheckFileName);
+  freePointer((void **)&(data -> dictionaryFileName));
+  freePointer((void **)&(data -> spellcheckFileName));
   free(mistakes);
   data -> numThreadsInUse--;
   data -> threadSucccessCount++;
@@ -320,41 +298,37 @@ int writeThreadToFile(const char *fileName, spellingError *listOfMistakes, unsig
 
   if (!fileName) {
     perror("invalid file name given\n");
-    return -2;
+    return FAILURE;
   }
   // asumes the array of spellingErrors is already sorted in descending order
   int totalErrors = 0;
   char *str = NULL, *currentFileName = NULL;
   // listOfMistakes[0] must be valid but should be since numElements >= 1
   currentFileName = listOfMistakes[0].fileName; // always at least 1 in the list so safe to dereference
-  if (currentFileName == NULL) {
-    perror("Not enough file names when writing thread info to file!\n");
-    return -2;
-  }
+  // if (currentFileName == NULL) {
+  //   perror("Not enough file names when writing thread info to file!\n");
+  //   return FAILURE;
+  // }
   for (int i = 0; i < numElements; i++) {
     totalErrors += listOfMistakes[i].countErrors;
   }
-  if (debugOutput) {
-    printToLog(debugFile, "total errors for file %s: %d\n", currentFileName, totalErrors);
-  }
+  printToLog(debugFile, "total errors for file %s: %d\n", currentFileName, totalErrors);
   size_t strSize = strlen(currentFileName) + getNumDigitsInNumber(totalErrors, 10) + 3; // extra 3 for two spaces and \0
   str = malloc(strSize);
-  str[0] = '\0';
   if (!str) {
-    perror("malloc failed inside writeThreadToFile");
-    return -1;
+    perror("malloc failed inside writeThreadToFile\n");
+    return FAILURE;
   }
+  str[0] = '\0';
   snprintf(str, strSize, "%s %d ", currentFileName, totalErrors); // first comes the filename itself
   char *tempString = NULL;
   for (int i = 0; i < numElements; i++) {
-    if (debugOutput) {
-      printToLog(debugFile, "string: %s\n", str);
-    }
+    printToLog(debugFile, "string: %s\n", str);
     if ((tempString = listOfMistakes[i].misspelledString)) { // it is possible that there are no
       str = realloc(str, strlen(str) + strlen(tempString) + 2); // 2 chars extra -- \0 and space/newline
       if (str == NULL) {
         perror("realloc failed for string variable inside writeThreadToFile function");
-        return -3;
+        return FAILURE;
       }
       strcat(str, tempString); // add the misspelled word
       if (i + 1 < numElements) {
@@ -362,20 +336,20 @@ int writeThreadToFile(const char *fileName, spellingError *listOfMistakes, unsig
       } else {
         strcat(str, "\n"); // ending newline
       }
-    } else if (debugOutput) {
-      // should not happen
-      printToLog(debugFile, "mistake misspelled string at index %d for file %s is NULL\n", i, currentFileName);
+    }
+    else {
+      if (printToLog(debugFile, "mistake misspelled string at index %d for file %s is NULL\n", i, currentFileName) == ALTERNATE_SUCCESS) {
+        fprintf(stderr, "mistake misspelled string at index %d for file %s is NULL\n", i, currentFileName);
+      }
     }
   }
   // Write the formatted string
-  if (debugOutput) {
-    printToLog(debugFile, "attempting to write to output file string %s\n", str);
-  }
+  printToLog(debugFile, "attempting to write to output file string %s\n", str);
   pthread_mutex_lock(&lock);
   printToOutputFile(fileName, str);
   pthread_mutex_unlock(&lock);
   free(str);
-  return 0; // Success
+  return SUCCESS; // Success
 }
 
 void removeNewline(char *string) {
@@ -479,106 +453,86 @@ void convertEntireStringToLower(char *string) {
 }
 
 char *getNonAlphabeticalCharsString() {
-  static char nonAlphaString[256 + 1] = ""; // Assuming ASCII
-  /* THIS IS IMPLEMENTATION DEPENDANT. CHECK BY USING limits.h */
-  if (CHAR_MAX == SCHAR_MAX) {
-    // printf("char is signed.\n");
-    for (short i = -128; i <= 127; i++) { // Assuming ASCII
-      if (!isalpha(i)&&
-        i != '\'') { // " ' " is considered to be part of the word
-        char temp[2] = {
-          i,
-          '\0'
-        }; // Convert character to string
-        strcat(nonAlphaString, temp); // Concatenate to result string
-      }
+  static char nonAlphaString[CHAR_MAX - CHAR_MIN + 1] = ""; // Assuming CHAR_MIN is negative
+  char temp[2] = {0};
+  for (int i = CHAR_MIN; i <= CHAR_MAX; i++) {
+    if (!isalpha(i) && i != '\'') { // Exclude alphabetic characters and '
+      temp[0] = (char)i;
+      strcat(nonAlphaString, temp); // Concatenate to result string
     }
-  } else if (CHAR_MAX == UCHAR_MAX) {
-    // printf("char is unsigned.\n");
-    for (short i = -128; i <= 127; i++) { // Assuming ASCII
-      if (!isalpha(i)&& i != '\'') { // " ' " is considered to be part of the word
-        //  && i != '\''
-        char temp[2] = {
-          i,
-          '\0'
-        }; // Convert character to string
-        strcat(nonAlphaString, temp); // Concatenate to result string
-      }
-    }
-  } else {
-    printf("Cannot determine whether char is signed or unsigned.\n");
-    return NULL;
   }
-  // make sure to use UNSIGNED chars since by default they are normally signed
   return nonAlphaString;
 }
 
-char **splitStringOnWhiteSpace(const char *inputString,
-  unsigned int *wordCount) {
+char **splitStringOnWhiteSpace(const char *inputString, unsigned int *wordCount) {
   if (!inputString || !wordCount) {
-    printf("passed in NULL\n");
+    fprintf(stderr, "passed in NULL\n");
     return NULL;
   }
-  *wordCount = 0;
+  unsigned int wordCountLocal = 0;
   bool prevWasWhitespace = true;
   // Count the number of words
   const char *ptr;
-  for (ptr = inputString;* ptr != '\0'; ptr++) {
-    // strchr(" \t\r\n\v\f\xE2\x80\xA8\xE2\x80\xA9\xA0", *ptr)
-    // strchr will return an address if it finds the char in the string
-    if (!(isalpha(* ptr) || *ptr == '\'')) { // apostrophe is special case
+  char character;
+  for (ptr = inputString; *ptr != '\0'; ptr++) {
+    character = *ptr;
+    if (!(isalpha(character) || character == '\'')) { // apostrophe is special case
       if (prevWasWhitespace) {
-        continue;
-      }
-      if (* ptr == '\'') {} else {
+        continue; // ignore whitespaces until non-whitespace char found
+      } else {
         prevWasWhitespace = true;
       }
-      (* wordCount) ++;
+      wordCountLocal++;
     } else {
       prevWasWhitespace = false;
     }
   }
   if (!prevWasWhitespace) {
-    (* wordCount) ++; // Account for the last word at EOF
+    wordCountLocal++; // Account for the last word at EOF
   }
-  if (* wordCount == 0) {
+  if (wordCountLocal == 0) {
     printf("no words in file. Returning early...\n");
+    *wordCount = 0;
     return NULL;
   }
   // Allocate memory for array of strings
-  char **words = (char **) malloc((* wordCount) *sizeof(char *));
+  char **words = (char **) malloc((wordCountLocal) *sizeof(char *));
   if (words == NULL) {
-    if (debugOutput) {
-      printToLog(debugFile, "Memory allocation failed for words arr\n");
+    if (printToLog(debugFile, "Memory allocation failed for words arr\n") == ALTERNATE_SUCCESS) {
+      fprintf(stderr, "Memory allocation failed for words arr\n");
     }
+    *wordCount = wordCountLocal;
     return NULL;
   }
-  for (int i = 0; i < *wordCount; i++) {
+  for (int i = 0; i < wordCountLocal; i++) {
     words[i] = NULL; // useful if words is freed before the inner ptrs are set
   }
   const char *delimiters = getNonAlphabeticalCharsString();
   if (!delimiters) {
-    if (debugOutput) {
-      printToLog(debugFile, "Delimiters were not created properly inside splitStringOnWhitespace\n");
+    if (printToLog(debugFile, "Delimiters were not created properly inside splitStringOnWhitespace\n") == ALTERNATE_SUCCESS) {
+      fprintf(stderr, "Delimiters were not created properly inside splitStringOnWhitespace\n");
     }
-    free2DArray((void ***)&words, *wordCount);
+    free2DArray((void ***)&words, wordCountLocal);
+    *wordCount = wordCountLocal;
     return NULL;
   }
   // printf("delims: %s\n", delimiters);
   char *token = strtok((char *) inputString, delimiters); // cast to char *
   int index = 0;
-  while (token != NULL && index < *wordCount) {
+  while (token != NULL && index < wordCountLocal) {
     words[index] = strdup(token); // Allocate memory for each word
     if (words[index] == NULL) {
-      if (debugOutput) {
-        printToLog(debugFile, "Memory allocation failed for strdup inside splitOnWhitespace");
+      if (printToLog(debugFile, "Memory allocation failed for strdup inside splitOnWhitespace") == ALTERNATE_SUCCESS) {
+        fprintf(stderr, "Memory allocation failed for strdup inside splitOnWhitespace");
       }
       free2DArray((void ***)&words, index);
+      *wordCount = wordCountLocal;
       return NULL;
     }
     index++;
     token = strtok(NULL, delimiters);
   }
+  *wordCount = wordCountLocal;
   return words;
 }
 
@@ -627,8 +581,8 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
   bool flag = false;
   char **seenWords = malloc(sizeof(char *) *numEntriesFile);
   if (!seenWords) {
-    if (debugOutput) {
-      printToLog(debugFile, "failed malloc\n");
+    if (printToLog(debugFile, "failed malloc inside compareFileData\n") == ALTERNATE_SUCCESS) {
+      fprintf(stderr, "failed malloc inside compareFileData\n");
     }
     return NULL;
   }
@@ -693,11 +647,10 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
   return mistakesArr;
 }
 
-unsigned int numStringMismatchesInArrayOfStrings(
-  const char **arrayOfDictionaryStrings,
-    const char **arrayOfFileStrings,
-      unsigned int sizeDictionary, unsigned int sizeFile,
-      const char *target) {
+unsigned int numStringMismatchesInArrayOfStrings(const char **arrayOfDictionaryStrings,
+  const char **arrayOfFileStrings,
+  unsigned int sizeDictionary, unsigned int sizeFile,
+  const char *target) {
   // retuns number of matches found
   // assumes that arrayOfDictionaryStrings is valid (no checks!)
   for (int i = 0; i < sizeDictionary; i++) {
@@ -722,17 +675,16 @@ unsigned int binarySearchArrayOfStrings(const char **sortedDictionaryArrayOfStri
     }
     unsigned int left = 0, right = dictionarySize - 1;
     while (left <= right) {
-        unsigned int mid = left + (right - left) / 2;
-        int comparison = strcmp(sortedDictionaryArrayOfStrings[mid], target);
-
-        if (comparison == 0) {
-            // Target substring exists in the dictionary, return 0
-            return 0;
-        } else if (comparison < 0) {
-            left = mid + 1; // If target is greater, ignore left half
-        } else {
-            right = mid - 1; // If target is smaller, ignore right half
-        }
+      unsigned int mid = left + (right - left) / 2;
+      int comparison = strcmp(sortedDictionaryArrayOfStrings[mid], target);
+      if (comparison == 0) {
+        // Target substring exists in the dictionary, return 0
+        return 0;
+      } else if (comparison < 0) {
+        left = mid + 1; // If target is greater, ignore left half
+      } else {
+        right = mid - 1; // If target is smaller, ignore right half
+      }
     }
 
     // If the target substring is not found in the dictionary, count its occurrences in the file string array
@@ -765,16 +717,14 @@ void quicksortStrings(char **arr, int left, int right) {
         j--;
       }
     }
-
     // Recursion
     quicksortStrings(arr, left, j);
     quicksortStrings(arr, i, right);
   }
 }
 
-void freeArrayOfSpellingErrors(spellingError **arrayOfMistakes,
-  unsigned int countInArr) {
-  if (arrayOfMistakes == NULL || !(*arrayOfMistakes)) {
+void freeArrayOfSpellingErrors(spellingError **arrayOfMistakes, unsigned int countInArr) {
+  if (arrayOfMistakes == NULL || *arrayOfMistakes == NULL) {
     return;
   }
   spellingError *array = *arrayOfMistakes; // safe as long as user does not pass in NULL
@@ -813,23 +763,27 @@ bool verifySortedStr(const char **sortedArrayOfStrings,
   return true;
 }
 
-bool verifySortedSpellingErrors(const spellingError *arrayOfSpellingErrors,
-  const int numElements) {
-  if (!arrayOfSpellingErrors || numElements < 1) {
-    return true;
-  }
-  const unsigned int min = arrayOfSpellingErrors[0].countErrors;
-  for (unsigned int i = 0; i < numElements; i++) {
-    if (arrayOfSpellingErrors[i].countErrors < min) {
-      // printf("int %d is less than %d\n",
-      //   arrayOfSpellingErrors[i].countErrors, min);
-      return false;
-    }
-  }
-  return true;
-}
+// bool verifySortedSpellingErrors(const spellingError *arrayOfSpellingErrors,
+//   const int numElements) {
+//   if (!arrayOfSpellingErrors || numElements < 1) {
+//     return true;
+//   }
+//   const unsigned int min = arrayOfSpellingErrors[0].countErrors;
+//   for (unsigned int i = 0; i < numElements; i++) {
+//     if (arrayOfSpellingErrors[i].countErrors < min) {
+//       // printf("int %d is less than %d\n",
+//       //   arrayOfSpellingErrors[i].countErrors, min);
+//       return false;
+//     }
+//   }
+//   return true;
+// }
 
 int printToLog(const char *debugFile, const char *stringLiteral, ...) {
+  if (!debugOutput) {
+    // if no debug enabled, do not log
+    return ALTERNATE_SUCCESS; // indicates success, but no logging
+  }
   pthread_mutex_lock(&lock);
   va_list args;
   va_start(args, stringLiteral);
@@ -839,16 +793,16 @@ int printToLog(const char *debugFile, const char *stringLiteral, ...) {
   int fd;
   if (firstWriteDebug) {
     if ((fd = open(debugFile, O_CREAT | O_WRONLY | O_TRUNC, 0644)) == -1) {
-      perror("Error opening debug file");
+      perror("Error opening debug file (first attempt)");
       pthread_mutex_unlock(&lock);
-      return -1;
+      return FAILURE;
     }
     firstWriteDebug = false;
   } else {
     if ((fd = open(debugFile, O_CREAT | O_WRONLY | O_APPEND, 0644)) == -1) {
       perror("Error opening debug file");
       pthread_mutex_unlock(&lock);
-      return -1;
+      return FAILURE;
     }
   }
   // Write the formatted string to the debug file
@@ -856,16 +810,16 @@ int printToLog(const char *debugFile, const char *stringLiteral, ...) {
     perror("Error writing to debug file");
     close(fd);
     pthread_mutex_unlock(&lock);
-    return -1;
+    return FAILURE;
   }
   // Close the file descriptor
   if (close(fd) == -1) {
     perror("Error closing debug file");
     pthread_mutex_unlock(&lock);
-    return -1;
+    return FAILURE;
   }
   pthread_mutex_unlock(&lock);
-  return 0; // Success
+  return SUCCESS; // Success
 }
 
 void free2DArray(void ***addressOfGenericPointer, int numberOfInnerElements) {
@@ -905,7 +859,7 @@ char *getOutputString(threadArguments threadArgs) {
   unsigned int totalMistakes = 0;
 
   // num array elements should be >= number of files processed
-  errorsInEachFile = malloc(sizeof(char *) *numThreads);
+  errorsInEachFile = (char **)malloc(sizeof(char *) * numThreads);
   if (!errorsInEachFile) {
     perror("malloc failed for errorsInEachFile\n");
     return NULL;
@@ -931,16 +885,14 @@ char *getOutputString(threadArguments threadArgs) {
   const char *fileName = NULL, *mistake = NULL;
   unsigned int arrSize;
   unsigned int totalSize = 1; // start with one for \0
-  for (int i = 0; i < numThreads; i++) {
+  for (unsigned int i = 0; i < numThreads; i++) {
     // rough estimate for max size
     arrSize = MAX_WORD_LENGTH *numUniqueMisspelledWords[i] +
-      MAX_FILE_NAME_LENGTH + max(numUniqueMisspelledWords[i] - 1, 0) *2 +
-      2; // includes the n-1 ", " strings, \n, and \0
+      MAX_FILE_NAME_LENGTH + max(numUniqueMisspelledWords[i] - 1, 0) * 2 + 2; // includes the n-1 ", " strings, \n, and \0
     totalSize += arrSize - 1;
     errorsInEachFile[i] = malloc(arrSize);
-    // printf("Malloced: %p for %d bytes\n", errorsInEachFile[i], arrSize);
     if (!errorsInEachFile[i]) {
-      perror("malloc failed for errorsInEachFile[i]\n");
+      fprintf(stderr, "malloc failed for errorsInEachFile[%d]\n", i);
       free(numUniqueMisspelledWords);
       for (int j = 0; j < i; j++) {
         free(errorsInEachFile[j]);
@@ -950,13 +902,11 @@ char *getOutputString(threadArguments threadArgs) {
     }
     fileName = getFileNameFromThreadID(threadArgs.errorArray, i, size);
     if (!fileName) {
-      sprintf(errorsInEachFile[i],
-        "NO INPUT FILE FOR THREAD %d (or file was empty)\n", i + 1);
+      sprintf(errorsInEachFile[i], "NO INPUT FILE FOR THREAD %d (or file was empty)\n", i + 1);
     } else {
       sprintf(errorsInEachFile[i], "File %d (%s): ", i + 1, fileName);
       for (int j = 0; j < numUniqueMisspelledWords[i]; j++) {
         mistake = getMistakeAtIndex(threadArgs.errorArray, i, j, size);
-        // printf("INDEX: %d", i);
         if (mistake) {
           strcat(errorsInEachFile[i], mistake);
           if (j < numUniqueMisspelledWords[i] - 1) {
@@ -1047,17 +997,24 @@ char *generateSummary(spellingError *errorArr, unsigned int numThreads,
         thirdBiggest);
     }
     inputString = realloc(inputString, strlen(inputString)  + strlen(formatString) + 1);
+    if (!inputString) {
+      perror("input string realloc failed inside generateSummary\n");
+      return NULL;
+    }
     strcat(inputString, formatString);
     if (i < numWordsToPrint - 1) {
       inputString = realloc(inputString, strlen(inputString)  + 3);
+      if (!inputString) {
+        perror("input string realloc failed inside generateSummary\n");
+        return NULL;
+      }
       strcat(inputString, ", ");
     }
   }
   return inputString;
 }
 
-const char *getMistakeAtIndex(spellingError *arr, int threadNum, int index,
-  unsigned int numElements) {
+const char *getMistakeAtIndex(spellingError *arr, int threadNum, int index, unsigned int numElements) {
   int count = 0;
   for (int i = 0; i < numElements; i++) {
     if (arr[i].threadID == threadNum) {
@@ -1071,8 +1028,8 @@ const char *getMistakeAtIndex(spellingError *arr, int threadNum, int index,
   return NULL;
 }
 
-unsigned int countMistakesForThread(spellingError *errorArr,
-  unsigned int numEntriesInArr, int index) {
+unsigned int countMistakesForThread(spellingError *errorArr, unsigned int numEntriesInArr, int index) {
+  // counts the number of misspelled unique words (NOT how many misspellings occured)
   unsigned int count = 0;
   for (int i = 0; i < numEntriesInArr; i++) {
     if (errorArr[i].threadID == index) {
@@ -1082,8 +1039,7 @@ unsigned int countMistakesForThread(spellingError *errorArr,
   return count;
 }
 
-const char *getFileNameFromThreadID(spellingError *arr, int index,
-  unsigned int numElements) {
+const char *getFileNameFromThreadID(spellingError *arr, int index, unsigned int numElements) {
   if (arr) {
     for (int i = 0; i < numElements; i++) {
       if (arr[i].threadID == index) {
@@ -1095,10 +1051,7 @@ const char *getFileNameFromThreadID(spellingError *arr, int index,
 }
 
 unsigned int max(unsigned int a, unsigned int b) {
-  if (a < b) {
-    return b;
-  }
-  return a;
+  return a < b ? b : a;
 }
 
 void printToOutputFile(const char *fileName,
@@ -1107,14 +1060,14 @@ void printToOutputFile(const char *fileName,
   if (firstWriteThreadOutput) {
     // create if it does not exist.
     if ((fd = open(fileName, O_CREAT | O_WRONLY | O_TRUNC, 0644)) == -1) {
-      perror("Error opening spellcheck file");
+      fprintf(stderr, "Error opening spellcheck file (first attempt)%s\n", fileName);
       return;
     }
     firstWriteThreadOutput = false;
   } else {
     // open for appending
     if ((fd = open(fileName, O_CREAT | O_WRONLY | O_APPEND, 0644)) == -1) {
-      perror("Error opening spellcheck file");
+      fprintf(stderr, "Error opening spellcheck file %s\n", fileName);
       return;
     }
   }
@@ -1126,15 +1079,13 @@ void printToOutputFile(const char *fileName,
   }
   // Close the file descriptor
   if (close(fd) == -1) {
-    fprintf(stderr,
-      "could not close file descriptor when writing to file %s\n.",
-      fileName);
+    fprintf(stderr, "could not close file descriptor when writing to file %s\n.", fileName);
     return;
   }
   return;
 }
 
-unsigned int getNumDigitsInNumber(int number, char base) {
+unsigned int getNumDigitsInNumber(int number, unsigned char base) {
   if (number == 0) {
     return 1;
   }

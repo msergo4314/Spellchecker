@@ -1,6 +1,6 @@
 CC = gcc
 # CFLAGS = -fopenmp -Wall -g -std=c11 -lpthread
-CFLAGS = -Wall -std=c11 -lpthread
+CFLAGS = -Wall -std=c11 -lpthread -g
 # CFLAGS = -O3 -Wall-g -std=c11 -lpthread # agressively optimized by the compiler
 
 SRCS = spellchecker.c
@@ -9,7 +9,7 @@ EXECUTABLE = spellchecker.exe
 
 all: $(EXECUTABLE)
 
-$(EXECUTABLE): $(OBJS)
+$(EXECUTABLE): $(OBJS) header.h
 	$(CC) $(CFLAGS) $(OBJS) -o $@
 
 %.o: %.c
