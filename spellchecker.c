@@ -3,7 +3,7 @@
 int main(int argc, char **argv) {
   bool l_flag = false, defaultMode = false;
   if (pthread_mutex_init(&lock, NULL) != 0) {
-    printf("\n mutex init has failed\n");
+    printf("mutex init has failed\n");
     return 1;
   }
   char fileNameString[MAX_FILE_NAME_LENGTH + 1] = "";
@@ -18,7 +18,7 @@ int main(int argc, char **argv) {
         return ALTERNATE_SUCCESS;
       }
       else if (!strcmp(argv[i], "--default") || !strcmp(argv[i], "-d")) {
-        strcpy(fileNameString, "dictionary.txt"); // default dictionary (must be in pwd!)
+        // make sure to have dictionary.txt file in pwd of the exe (does not have to be actual pwd  )
         defaultMode = true;
       }
     }
@@ -67,59 +67,59 @@ int main(int argc, char **argv) {
       fprintf(stderr, "too many threads in use\n");
       goto case_2;
     }
-    char qString[] = "q";
-    char *fileNameStringCopy = NULL;
+    char *qString = "q";
+    char fileNameStringCopy[MAX_FILE_NAME_LENGTH + 1];
     // get dictionary to process
     if (!defaultMode) { // if fielNameString is empty then ask for dictionary
       printf("Enter the filename of the dictionary (or 'Q' to quit): ");
       fgets(fileNameString, sizeof(fileNameString), stdin);
       removeNewline(fileNameString);
-      fileNameStringCopy = strdup(fileNameString);
+      strcpy(fileNameStringCopy, fileNameString);
       convertEntireStringToLower(fileNameStringCopy);
       if (!strcmp(fileNameStringCopy, qString)) {
-        free(fileNameStringCopy);
         printf("Exiting...\n");
         goto main_menu;
       }
-      free(fileNameStringCopy);
+    } else {
+      strcpy(fileNameString, "dictionary.txt");
     }
-    args.dictionaryFileName = strdup(fileNameString);
-    if (args.dictionaryFileName == NULL) {
-      perror("Could not malloc with strdup in main. Exiting...\n");
+    args.dictionaryFileName = realloc(args.dictionaryFileName, strlen(fileNameString) + 1);
+    if (!args.dictionaryFileName) {
+      perror("realloc failure for args struct dictionaryFileName\n");
       pthread_mutex_destroy(&lock);
       freePointer((void **)&threadIDs);
       freeArrayOfSpellingErrors(&(args.errorArray), args.prevSize);
       return FAILURE;
     }
+    strcpy(args.dictionaryFileName, fileNameString);
     // get file to process
     printf("Enter the filename of the input file (or 'Q' to quit): ");
     fgets(fileNameString, sizeof(fileNameString), stdin);
     removeNewline(fileNameString);
-    fileNameStringCopy = strdup(fileNameString);
+    strcpy(fileNameStringCopy, fileNameString);
     convertEntireStringToLower(fileNameStringCopy);
     if (!strcmp(fileNameString, qString)) {
-      free(fileNameStringCopy);
-      free(args.dictionaryFileName);
+      freePointer((void **)&(args.dictionaryFileName));
+      freePointer((void **)&(args.spellcheckFileName));
       printf("Exiting...\n");
       goto main_menu;
     }
-    free(fileNameStringCopy);
     pthread_mutex_lock(&lock);
-    // freePointer((void **)&(args.spellcheckFileName));
-    args.spellcheckFileName = strdup(fileNameString);
+    args.spellcheckFileName = realloc(args.spellcheckFileName, strlen(fileNameString) + 1);
     if (!args.spellcheckFileName) {
-      perror("Could not malloc with strdup in main (input file strdup failure). Exiting...\n");
+      perror("realloc failure for args struct spellcheckFileName\n");
       pthread_mutex_destroy(&lock);
       freePointer((void **)&threadIDs);
       freeArrayOfSpellingErrors(&(args.errorArray), args.prevSize);
-      return (FAILURE);
+      return FAILURE;
     }
+    strcpy(args.spellcheckFileName, fileNameString);
     pthread_mutex_unlock(&lock);
-    threadIDs = (pthread_t *) realloc( threadIDs, (sizeof(pthread_t) *(numThreadsStarted + 1)));
+    threadIDs = (pthread_t *) realloc(threadIDs, (sizeof(pthread_t) * (numThreadsStarted + 1)));
     if (!threadIDs) {
       printf("failed to realloc for threadIDs\n");
-      free(args.dictionaryFileName);
-      free(args.spellcheckFileName);
+      freePointer((void **)&(args.dictionaryFileName));
+      freePointer((void **)&(args.spellcheckFileName));
       pthread_mutex_destroy(&lock);
       return FAILURE;
     }
@@ -127,7 +127,7 @@ int main(int argc, char **argv) {
     // printf("making thread %d\n", numThreadsStarted + 1);
     int error = pthread_create(&(threadIDs[numThreadsStarted]), NULL, threadFunction, (void *)&args);
     if (error != 0) {
-      printf("Thread can't be created: %s\n", strerror(error));
+      fprintf(stderr, "Thread can't be created: %s\n", strerror(error));
       free(args.dictionaryFileName);
       free(args.spellcheckFileName);
       free(threadIDs);
@@ -136,6 +136,8 @@ int main(int argc, char **argv) {
       }
       pthread_mutex_unlock(&lock);
       pthread_mutex_destroy(&lock);
+      freePointer((void **)&(args.dictionaryFileName));
+      freePointer((void **)&(args.spellcheckFileName));
       return FAILURE;
     }
     pthread_mutex_lock(&lock);
@@ -159,7 +161,9 @@ int main(int argc, char **argv) {
     pthread_mutex_unlock(&lock);
     if (threadIDs) {
       for (int i = 0; i < numThreadsStarted; i++) {
-        printf("waiting for thread #%d (ID = %lu)\n", i + 1, threadIDs[i]);
+        pthread_mutex_lock(&lock);
+        printf("waiting for thread #%d (ID = %lu) -- %d threads still running\n", i + 1, threadIDs[i], args.numThreadsInUse);
+        pthread_mutex_unlock(&lock);
         // printf("there are %d threads running currently\n",
         // args.numThreadsInUse); pthread_mutex_unlock(&lock);
         pthread_join(threadIDs[i], NULL);
@@ -180,6 +184,8 @@ int main(int argc, char **argv) {
     end_time = clock(); // Record the end time
     cpu_time_used = ((double)(end_time - start_time)) / CLOCKS_PER_SEC;
     printf("\n\nExecution time: %lf\n\n", cpu_time_used);
+    freePointer((void **)&(args.dictionaryFileName));
+    freePointer((void **)&(args.spellcheckFileName));
     return SUCCESS; // do not need break since end of main
   default:
     printf("not valid. Try again\n");
@@ -193,8 +199,10 @@ void *threadFunction(void *vargp) {
   data -> numThreadsInUse++;
   unsigned int threadID = data -> numThreadsStarted;
   data -> numThreadsStarted++;
-  char *dictionaryFileName = data -> dictionaryFileName;
-  char *spellcheckFileName = data -> spellcheckFileName;
+  char *dictionaryFileName = malloc(strlen(data->dictionaryFileName) + 1);
+  strcpy(dictionaryFileName, data->dictionaryFileName);
+  char *spellcheckFileName = malloc(strlen(data->spellcheckFileName) + 1);
+  strcpy(spellcheckFileName, data->spellcheckFileName);
   // printFlush("Thread ID: %d\n", pthread_self());
   char **fileArrayOfStrings = NULL;
   char **dictionaryArrayOfStrings = NULL;
@@ -207,6 +215,7 @@ void *threadFunction(void *vargp) {
     printToLog(debugFile, "split file is:\n\n");
   }
   unsigned int wordCountDictionary = 0;
+  // printf("file to check (dictionary): %s\n", dictionaryFileName);
   dictionaryArrayOfStrings = readFileArray(dictionaryFileName, &wordCountDictionary);
   if (!dictionaryArrayOfStrings) { 
     // fprintf(stderr, "Reading words array from dictionary file failed!\n");
@@ -227,6 +236,7 @@ void *threadFunction(void *vargp) {
     printToLog(debugFile, "split file is:\n\n");
   }
   unsigned int wordCountFile = 0;
+  // printf("file to check (spellcheckfile): %s\n", spellcheckFileName);
   fileArrayOfStrings = readFileArray(spellcheckFileName, &wordCountFile);
   if (fileArrayOfStrings == NULL) {
     // fprintf(stderr, "Reading words array from file failed!\n"); 
@@ -242,10 +252,10 @@ void *threadFunction(void *vargp) {
   if (wordCountDictionary < 1 || wordCountFile < 1) {
     exit_failure:
     pthread_mutex_lock(&lock);
-    freePointer((void **)&(data -> dictionaryFileName));
-    freePointer((void **)&(data -> spellcheckFileName));
     free2DArray((void ***)&fileArrayOfStrings, wordCountFile);
     free2DArray((void ***)&dictionaryArrayOfStrings, wordCountDictionary);
+    free(spellcheckFileName);
+    free(dictionaryFileName);
     data -> numThreadsFinished++;
     data -> numThreadsInUse--;
     pthread_mutex_unlock(&lock);
@@ -287,16 +297,17 @@ void *threadFunction(void *vargp) {
   if (writeThreadToFile(threadOutputFile, mistakes, countInArr) == FAILURE) {
     fprintf(stderr, "error with logging output of thread analysis to file %s!\n", threadOutputFile);
     free(mistakes);
+    freeArrayOfSpellingErrors(&mistakes, data -> prevSize);
     goto exit_failure;
   }
   // exit success
   pthread_mutex_lock(&lock);
-  freePointer((void **)&(data -> dictionaryFileName));
-  freePointer((void **)&(data -> spellcheckFileName));
   free(mistakes);
   data -> numThreadsInUse--;
   data -> threadSucccessCount++;
   data -> numThreadsFinished++;
+  free(spellcheckFileName);
+  free(dictionaryFileName);
   pthread_mutex_unlock(&lock);
   return NULL;
 }
@@ -367,7 +378,12 @@ void removeNewline(char *string) {
 
 char *readEntireFileIntoStr(const char *fileName, unsigned int *sizeBytes) {
   // use mutex in case another thread is also reading the file
+  if (fileName == NULL) {
+    perror("fileName is NULL for readEntireFileIntoStr");
+    return NULL;
+  }
   int fd;
+  // pthread_mutex_lock(&lock);
   if ((fd = open(fileName, O_RDONLY)) == -1) {
     printf("bad file descriptor. File most likely does not exist\n");
     return NULL;
@@ -389,10 +405,10 @@ char *readEntireFileIntoStr(const char *fileName, unsigned int *sizeBytes) {
   if (numBytesRead != size) {
     free(readString);
     close(fd);
-    fprintf(stderr, "read failed! Expected %d bytes, received %d\n", size,
-      numBytesRead);
+    fprintf(stderr, "read failed! Expected %d bytes, received %d\n", size, numBytesRead);
     return NULL;
   }
+  // pthread_mutex_unlock(&lock);
   readString[size] = '\0'; // manually add the null terminator
   *sizeBytes = size;
   close(fd);
@@ -882,7 +898,6 @@ char *getOutputString(threadArguments threadArgs) {
     return NULL;
   }
   for (unsigned int i = 0; i < numThreads; i++) {
-    errorsInEachFile[i] = NULL;
     numUniqueMisspelledWords[i] = countMistakesForThread(threadArgs.errorArray, size, i);
     if (debugOutput) {
       printToLog(debugFile, "number of unique errors for thread %d: %d\n", i + 1, numUniqueMisspelledWords[i]);
