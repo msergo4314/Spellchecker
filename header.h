@@ -1,9 +1,8 @@
 #define _POSIX_C_SOURCE 200809L // most likely won't need
-#define MAX_WORD_LENGTH 50
+#define MAX_WORD_LENGTH 40
 #define MAX_FILE_NAME_LENGTH 50
 #define MAX_SIZE_USERINPUT 100
 #define MAX_THREADS 16 // depends on machine so should be sure to check your machine
-#define MAX_OUTPUT_MESSAGE_SIZE 5000 // in case the filenames are really damn big
 #include <ctype.h> // tolower, isalpha, etc
 #include <pthread.h> // multithreading
 #include <stdatomic.h> // for atomic values
@@ -30,7 +29,6 @@ bool firstWriteThreadOutput = true;
 
 const bool debugOutput = true; // flag for extra prints to file
 const bool detailedDebug = false;
-// const bool doSorting = false; // not very useful but it's here. Enables/disables sorting of file array (could be useful for a binary search)
 
 typedef struct mistake {
   unsigned int countErrors;
@@ -75,7 +73,8 @@ void freePointer(void **addressOfGenericPointer);
 spellingError *compareFileData(const char **dictionaryData, const char ** fileData, const unsigned int numEntriesDictionary,
 const unsigned int numEntriesInFile, unsigned int *countTotalMistakes, unsigned int *countInArr);
 void freeArrayOfSpellingErrors(spellingError **arrayOfMistakes, unsigned int countInArr);
-unsigned int numStringMismatchesInArrayOfStrings(const char **arrayOfDictionaryStrings, const char **arrayOfFileStrings, unsigned int sizeDictionary, unsigned int sizeFile,  const char *target);
+unsigned int numStringMismatchesInArrayOfStrings(const char **arrayOfDictionaryStrings, const char **arrayOfFileStrings,
+unsigned int sizeDictionary, unsigned int sizeFile,  const char *target);
 bool verifySortedStr(const char ** sortedArrayOfStrings, const unsigned int numStrings);
 // bool verifySortedSpellingErrors(const spellingError *arrayOfSpellingErrors, const int numElements);
 int partitionSpellingErrorArr(spellingError *arr, int start, int end);

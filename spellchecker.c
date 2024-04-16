@@ -43,8 +43,12 @@ int main(int argc, char **argv) {
   double cpu_time_used;
   // struct for thread arguments
   threadArguments args = {0}; // set all to 0, threads will update values
-  args.errorArray = NULL;
   start_time = clock();
+  // char cwd[1024];
+  // if (getcwd(cwd, sizeof(cwd)) != NULL) {
+  //     printf("Current working directory: %s\n", cwd);
+  //     // Use cwd to construct file paths relative to the current directory
+  // }
   main_menu:
     printf("Main Menu:\n");
   printf("1. Start a new spellchecking task\n2. Exit\n\n");
@@ -61,12 +65,6 @@ int main(int argc, char **argv) {
   unsigned char selection = (unsigned char) strtoul(userInput, NULL, 10);
   switch (selection) {
   case 1:
-    // if numThreads not used, then use #define constant for max threads
-    if (numThreadsInUse >= MAX_THREADS) {
-      // if (numThreadsInUse >= numThreads) {
-      fprintf(stderr, "too many threads in use\n");
-      goto case_2;
-    }
     char *qString = "q";
     char fileNameStringCopy[MAX_FILE_NAME_LENGTH + 1];
     // get dictionary to process
@@ -134,7 +132,6 @@ int main(int argc, char **argv) {
       if (args.errorArray) {
         free(args.errorArray);
       }
-      pthread_mutex_unlock(&lock);
       pthread_mutex_destroy(&lock);
       freePointer((void **)&(args.dictionaryFileName));
       freePointer((void **)&(args.spellcheckFileName));
@@ -147,25 +144,21 @@ int main(int argc, char **argv) {
     pthread_mutex_unlock(&lock);
     goto main_menu;
   case 2:
-    case_2:
-      // int status;
     printf("\nexiting program...\n");
-    pthread_mutex_lock(&lock);
     char *outputString;
+    pthread_mutex_lock(&lock);
     unsigned int numThreadsFinished = args.numThreadsFinished;
     numThreadsStarted = args.numThreadsStarted;
     numThreadsInUse = args.numThreadsInUse;
+    pthread_mutex_unlock(&lock);
     printf("Number of threads started: %d\n", numThreadsStarted);
     printf("%d threads finished execution\n", numThreadsFinished);
     printf("%d threads running currently\n", numThreadsInUse);
-    pthread_mutex_unlock(&lock);
     if (threadIDs) {
       for (int i = 0; i < numThreadsStarted; i++) {
         pthread_mutex_lock(&lock);
         printf("waiting for thread #%d (ID = %lu) -- %d threads still running\n", i + 1, threadIDs[i], args.numThreadsInUse);
         pthread_mutex_unlock(&lock);
-        // printf("there are %d threads running currently\n",
-        // args.numThreadsInUse); pthread_mutex_unlock(&lock);
         pthread_join(threadIDs[i], NULL);
       }
       printf("All threads finished\n");
@@ -183,10 +176,10 @@ int main(int argc, char **argv) {
     pthread_mutex_destroy(&lock);
     end_time = clock(); // Record the end time
     cpu_time_used = ((double)(end_time - start_time)) / CLOCKS_PER_SEC;
-    printf("\n\nExecution time: %lf\n\n", cpu_time_used);
+    printf("\n\nExecution time: %lf\n", cpu_time_used);
     freePointer((void **)&(args.dictionaryFileName));
     freePointer((void **)&(args.spellcheckFileName));
-    return SUCCESS; // do not need break since end of main
+    return SUCCESS; // end of main
   default:
     printf("not valid. Try again\n");
     goto input_loop;
@@ -695,10 +688,12 @@ unsigned int binarySearchArrayOfStrings(const char **sortedDictionaryArrayOfStri
     if (sortedDictionaryArrayOfStrings == NULL || arrayOfFileStrings == NULL || *sortedDictionaryArrayOfStrings == NULL || *arrayOfFileStrings == NULL || target == NULL) {
       return 0;
     }
-    unsigned int left = 0, right = dictionarySize - 1;
+    unsigned int left = 0, right = dictionarySize - 1, mid;
+    int comparison;
     while (left <= right) {
-      unsigned int mid = left + (right - left) / 2;
-      int comparison = strcmp(sortedDictionaryArrayOfStrings[mid], target);
+      mid = left + (right - left) / 2;
+      // printf("midpoint of %u and %u is: %u\n", left, right, mid);
+      comparison = strcmp(sortedDictionaryArrayOfStrings[mid], target);
       if (comparison == 0) {
         // Target substring exists in the dictionary, return 0
         return 0;
@@ -711,12 +706,9 @@ unsigned int binarySearchArrayOfStrings(const char **sortedDictionaryArrayOfStri
 
     // If the target substring is not found in the dictionary, count its occurrences in the file string array
     unsigned int count = 0;
-    for (unsigned int i = 0; i < fileSize; ++i) {
-        const char *fileString = arrayOfFileStrings[i];
-        const char *substring = strstr(fileString, target);
-        while (substring != NULL) {
-            count++;
-            substring = strstr(substring + 1, target);
+    for (unsigned int i = 0; i < fileSize; i++) {
+        if (!strcmp(arrayOfFileStrings[i], target)) {
+          count++;
         }
     }
     return count;
