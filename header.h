@@ -27,7 +27,7 @@ const char *threadOutputFile = "username.out";
 bool firstWriteDebug = true;
 bool firstWriteThreadOutput = true;
 
-const bool debugOutput = true; // flag for extra prints to file
+const bool debugOutput = false; // flag for extra prints to file
 const bool detailedDebug = false;
 
 typedef struct mistake {
@@ -92,3 +92,5 @@ int writeThreadToFile(const char *fileName, spellingError *listOfMistakes, unsig
 void printToOutputFile(const char *fileName, const char* stringToPrint);
 unsigned int getNumDigitsInNumber(int number, unsigned char base);
 void quicksortStrings(char **arrayofStrings, int left, int right);
+
+unsigned int numberOfStringMatchesInArrayOfStrings(const char **arrayOfStrings, unsigned int numStrings, const char *target);

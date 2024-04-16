@@ -588,10 +588,17 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
   spellingError *mistakesArr = NULL; // no entries yet
   unsigned int countMistakesForCurrentWord = 0;
   
+  clock_t start, end;
+  start = clock();
   quicksortStrings((char **) dictionaryData, 0, numEntriesDictionary - 1);
-  if (!verifySortedStr(dictionaryData, numEntriesDictionary)) {
-    printFlush("DICTIONARY NOT SORTED!");
-    return NULL;
+  quicksortStrings((char **) fileData, 0, numEntriesFile - 1);
+  end = clock();
+  printFlush("Time to sort: %lf\n", ((double)(end - start)) / CLOCKS_PER_SEC);
+  if (!verifySortedStr(dictionaryData, numEntriesDictionary) || !verifySortedStr(fileData, numEntriesFile)) {
+    printFlush("SORT FAILED!");
+    free2DArray((void ***)(&dictionaryData), numEntriesDictionary);
+    free2DArray((void ***)(&fileData), numEntriesFile);
+    exit(EXIT_FAILURE);
   }
   bool flag = false;
   char **seenWords = malloc(sizeof(char *) *numEntriesFile);
@@ -617,10 +624,6 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
       continue;
     }
     seenWords[i] = strdup(fileData[i]);
-    // if ((countMistakesForCurrentWord = numStringMismatchesInArrayOfStrings(
-    //     (const char **) dictionaryData, (const char **) fileData,
-    //     numEntriesDictionary, numEntriesFile, fileData[i]))) {
-
       if ((countMistakesForCurrentWord = binarySearchArrayOfStrings((const char **)dictionaryData, numEntriesDictionary, (const char**)fileData, numEntriesFile, (const char *)fileData[i])) > 0) {
       // if ((countMistakesForCurrentWord = numStringMismatchesInArrayOfStrings(dictionaryData, fileData, numEntriesDictionary, numEntriesFile, (const char *)fileData[i])) > 0) {
       // this is when a match is NOT found...
@@ -636,18 +639,15 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
       mistakesArr[temp].dictionaryName = NULL;
       mistakesArr[temp].fileName = NULL;
       if (mistakesArr[temp].misspelledString == NULL) {
-        if (debugOutput) {
-          printToLog(debugFile, "error with malloc for strdup\n");
-        } else {
-          printf("error with malloc for strdup\n");
-        }
-        return NULL;
+        printf("error with malloc for strdup\n");
+        free2DArray((void ***)(&dictionaryData), numEntriesDictionary);
+        free2DArray((void ***)(&fileData), numEntriesFile);
+        exit(EXIT_FAILURE);
       }
     }
   }
   free2DArray((void ***)&seenWords, numEntriesFile);
-  if (!mistakesArr) { // if there are no mistakes create the array and
-    // populate it with one entry
+  if (!mistakesArr) { // if there are no mistakes create the array and populate it with one entry
     mistakesArr = (spellingError *) malloc(sizeof(spellingError));
     if (!mistakesArr) {
       perror("could not malloc mistake array inside compareFileData\n");
@@ -662,10 +662,8 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
   return mistakesArr;
 }
 
-unsigned int numStringMismatchesInArrayOfStrings(const char **arrayOfDictionaryStrings,
-  const char **arrayOfFileStrings,
-  unsigned int sizeDictionary, unsigned int sizeFile,
-  const char *target) {
+unsigned int numStringMismatchesInArrayOfStrings(const char **arrayOfDictionaryStrings, const char **arrayOfFileStrings,
+  unsigned int sizeDictionary, unsigned int sizeFile, const char *target) {
   // retuns number of matches found
   // assumes that arrayOfDictionaryStrings is valid (no checks!)
   for (int i = 0; i < sizeDictionary; i++) {
@@ -684,34 +682,87 @@ unsigned int numStringMismatchesInArrayOfStrings(const char **arrayOfDictionaryS
 
 unsigned int binarySearchArrayOfStrings(const char **sortedDictionaryArrayOfStrings, unsigned int dictionarySize,
                                         const char **arrayOfFileStrings, unsigned int fileSize, const char *target) {
-    // Binary search in the dictionary array
-    if (sortedDictionaryArrayOfStrings == NULL || arrayOfFileStrings == NULL || *sortedDictionaryArrayOfStrings == NULL || *arrayOfFileStrings == NULL || target == NULL) {
+  // Binary search in the dictionary array
+  if (sortedDictionaryArrayOfStrings == NULL || arrayOfFileStrings == NULL || *sortedDictionaryArrayOfStrings == NULL || *arrayOfFileStrings == NULL || target == NULL) {
+    return 0;
+  }
+  unsigned int left = 0, right = dictionarySize - 1, mid;
+  int comparison;
+  while (left <= right) {
+    mid = left + (right - left) / 2;
+    // printf("midpoint of %u and %u is: %u\n", left, right, mid);
+    comparison = strcmp(sortedDictionaryArrayOfStrings[mid], target);
+    if (comparison == 0) {
+      // Target substring exists in the dictionary, return 0
       return 0;
+    } else if (comparison < 0) {
+      left = mid + 1; // If target is greater, ignore left half
+    } else {
+      if (mid == 0) {
+        break;
+      }
+      right = mid - 1; // If target is smaller, ignore right half
     }
-    unsigned int left = 0, right = dictionarySize - 1, mid;
-    int comparison;
-    while (left <= right) {
-      mid = left + (right - left) / 2;
-      // printf("midpoint of %u and %u is: %u\n", left, right, mid);
-      comparison = strcmp(sortedDictionaryArrayOfStrings[mid], target);
-      if (comparison == 0) {
-        // Target substring exists in the dictionary, return 0
-        return 0;
-      } else if (comparison < 0) {
-        left = mid + 1; // If target is greater, ignore left half
-      } else {
-        right = mid - 1; // If target is smaller, ignore right half
+  }
+  // printf("%s not in dictionary file\n", target);
+
+  // If the target substring is not found in the dictionary, count its occurrences in the file string array
+  unsigned int count = 0;
+  // clock_t start, end;
+  // start = clock();
+  for (unsigned int i = 0; i < fileSize; i++) {
+    if (!strcmp(arrayOfFileStrings[i], target)) {
+      count++;
+    }
+  }
+  // count = numberOfStringMatchesInArrayOfStrings(arrayOfFileStrings, fileSize, target);
+  // end = clock();
+  // printFlush("Time to search for %s: %lf -- count: %u\n", target, ((double)(end - start)) / CLOCKS_PER_SEC, count);
+  return count;
+}
+
+unsigned int numberOfStringMatchesInArrayOfStrings(const char **arrayOfStrings, unsigned int numStrings, const char *target) {
+  // Assume sorted input, use binary search
+  unsigned int left = 0, right = numStrings - 1, mid;
+  int comparison;
+  unsigned int count = 0; // Initialize count for matches
+  while (left <= right) {
+    mid = left + (right - left) / 2;
+    comparison = strcmp(arrayOfStrings[mid], target);
+    if (comparison == 0) {
+      // Increment count if target string matches current string
+      count++;
+      // Search for more matches to the left
+      unsigned int i = mid - 1;
+      if (mid == 0) {
+        break;
+      }
+      while (i >= left && strcmp(arrayOfStrings[i], target) == 0) {
+        count++;
+        if (i == 0) {
+          break;
+        }
+        i--;
+      }
+      // Search for more matches to the right
+      i = mid + 1;
+      while (i <= right && strcmp(arrayOfStrings[i], target) == 0) {
+        count++;
+        i++;
+      }
+      // Return count of matches
+      return count;
+    } else if (comparison < 0) {
+      left = mid + 1; // If target is greater, ignore left half
+    } else {
+      right = mid - 1; // If target is smaller, ignore right half
+      if (mid == 0) {
+        break;
       }
     }
-
-    // If the target substring is not found in the dictionary, count its occurrences in the file string array
-    unsigned int count = 0;
-    for (unsigned int i = 0; i < fileSize; i++) {
-        if (!strcmp(arrayOfFileStrings[i], target)) {
-          count++;
-        }
-    }
-    return count;
+  }
+  // If target string is not found, return count of matches (which is 0)
+  return count;
 }
 
 void quicksortStrings(char **arr, int left, int right) {
