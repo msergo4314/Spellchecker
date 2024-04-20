@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
   printf("Select the mode of operation (1 or 2): ");
   fgets(userInput, sizeof(userInput), stdin);
   unsigned char x;
-  while ((x = validateUserInput(userInput)) != INTEGER) {
+  while ((x = validateUserInput(userInput)) != UINTEGER) {
     input_loop:
     // printf("Invalid. You entered a string of type %s. Try again: ",
     // returnTypeStrings[x]);
@@ -315,10 +315,6 @@ int writeThreadToFile(const char *fileName, spellingError *listOfMistakes, unsig
   char *str = NULL, *currentFileName = NULL;
   // listOfMistakes[0] must be valid but should be since numElements >= 1
   currentFileName = listOfMistakes[0].fileName; // always at least 1 in the list so safe to dereference
-  // if (currentFileName == NULL) {
-  //   perror("Not enough file names when writing thread info to file!\n");
-  //   return FAILURE;
-  // }
   for (int i = 0; i < numElements; i++) {
     totalErrors += listOfMistakes[i].countErrors;
   }
@@ -385,7 +381,7 @@ char *readEntireFileIntoStr(const char *fileName, unsigned int *sizeBytes) {
   char *readString = malloc(size + 1); // one byte extra for \0
   if (readString == NULL) {
     close(fd);
-    perror("fatal error, malloc failed!\n");
+    perror("fatal error, malloc failed inside readEntireFileIntoStr\n");
     return NULL;
   }
   if (lseek(fd, 0, SEEK_SET) == -1) {
@@ -426,7 +422,7 @@ unsigned char validateUserInput(char *inputString) {
     return FLOAT;
   }
   if (digit && !chars && !hasDecimal) {
-    return INTEGER;
+    return UINTEGER;
   }
   if (chars && !digit) {
     return ALPHA_ONLY;
@@ -451,11 +447,10 @@ char **readFileArray(const char *fileName, unsigned int *wordCount) {
   }
   convertEntireStringToLower(singleFileString);
   stringArrToReturn = splitStringOnWhiteSpace(singleFileString, wordCount);
+  free(singleFileString);
   if (stringArrToReturn == NULL) {
-    free(singleFileString);
     return NULL;
   }
-  free(singleFileString);
   return stringArrToReturn;
 }
 
@@ -467,16 +462,16 @@ void convertEntireStringToLower(char *string) {
   }
 }
 
-char *getNonAlphabeticalCharsString() {
-  static char nonAlphaString[CHAR_MAX - CHAR_MIN + 1] = ""; // Assuming CHAR_MIN is negative
+void getNonAlphabeticalCharsString(char *buffer) {
+  buffer[0] = '\0';  // Reset the string to an empty string
   char temp[2] = {0};
   for (int i = CHAR_MIN; i <= CHAR_MAX; i++) {
     if (!isalpha(i) && i != '\'') { // Exclude alphabetic characters and '
       temp[0] = (char)i;
-      strcat(nonAlphaString, temp); // Concatenate to result string
+      strcat(buffer, temp); // Concatenate to result string
     }
   }
-  return nonAlphaString;
+  return;
 }
 
 char **splitStringOnWhiteSpace(const char *inputString, unsigned int *wordCount) {
@@ -522,15 +517,8 @@ char **splitStringOnWhiteSpace(const char *inputString, unsigned int *wordCount)
   for (int i = 0; i < wordCountLocal; i++) {
     words[i] = NULL; // useful if words is freed before the inner ptrs are set
   }
-  const char *delimiters = getNonAlphabeticalCharsString();
-  if (!delimiters) {
-    if (printToLog(debugFile, "Delimiters were not created properly inside splitStringOnWhitespace\n") == ALTERNATE_SUCCESS) {
-      fprintf(stderr, "Delimiters were not created properly inside splitStringOnWhitespace\n");
-    }
-    free2DArray((void ***)&words, wordCountLocal);
-    *wordCount = wordCountLocal;
-    return NULL;
-  }
+  char delimiters[CHAR_MAX - CHAR_MIN + 1] = "";
+  getNonAlphabeticalCharsString(delimiters);
   // printf("delims: %s\n", delimiters);
   char *token = strtok((char *) inputString, delimiters); // cast to char *
   int index = 0;
@@ -591,14 +579,18 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
   clock_t start, end;
   start = clock();
   quicksortStrings((char **) dictionaryData, 0, numEntriesDictionary - 1);
+  end = clock();
+  printFlush("Time to sort dictionary: %lf\n", ((double)(end - start)) / CLOCKS_PER_SEC);
+  start = clock();
   quicksortStrings((char **) fileData, 0, numEntriesFile - 1);
   end = clock();
-  printFlush("Time to sort: %lf\n", ((double)(end - start)) / CLOCKS_PER_SEC);
+  printFlush("Time to sort spellcheck file: %lf\n", ((double)(end - start)) / CLOCKS_PER_SEC);
+  // printf("size of clock_t: %lu\n", sizeof(clock_t));
   if (!verifySortedStr(dictionaryData, numEntriesDictionary) || !verifySortedStr(fileData, numEntriesFile)) {
     printFlush("SORT FAILED!");
     free2DArray((void ***)(&dictionaryData), numEntriesDictionary);
     free2DArray((void ***)(&fileData), numEntriesFile);
-    exit(EXIT_FAILURE);
+    return NULL;
   }
   bool flag = false;
   char **seenWords = malloc(sizeof(char *) *numEntriesFile);
@@ -606,6 +598,8 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
     if (printToLog(debugFile, "failed malloc inside compareFileData\n") == ALTERNATE_SUCCESS) {
       fprintf(stderr, "failed malloc inside compareFileData\n");
     }
+    free2DArray((void ***)(&dictionaryData), numEntriesDictionary);
+    free2DArray((void ***)(&fileData), numEntriesFile);
     return NULL;
   }
   for (int i = 0; i < numEntriesFile; i++) {
@@ -614,8 +608,7 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
   for (int i = 0; i < numEntriesFile; i++) { // for each word in the file...
     flag = false;
     for (int j = 0; j < i; j++) {
-      if (seenWords[j] != NULL && fileData[i] &&
-        strcmp(fileData[i], seenWords[j]) == 0) {
+      if (seenWords[j] != NULL && fileData[i] && strcmp(fileData[i], seenWords[j]) == 0) {
         flag = true; // Word already seen
         break;
       }
@@ -624,11 +617,16 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
       continue;
     }
     seenWords[i] = strdup(fileData[i]);
+    if (!seenWords[i]) {
+      perror("strdup failed for seenwords inside comparison function\n");
+      free2DArray((void ***)(&dictionaryData), numEntriesDictionary);
+      free2DArray((void ***)(&fileData), numEntriesFile);
+      return NULL;
+    }
       if ((countMistakesForCurrentWord = binarySearchArrayOfStrings((const char **)dictionaryData, numEntriesDictionary, (const char**)fileData, numEntriesFile, (const char *)fileData[i])) > 0) {
       // if ((countMistakesForCurrentWord = numStringMismatchesInArrayOfStrings(dictionaryData, fileData, numEntriesDictionary, numEntriesFile, (const char *)fileData[i])) > 0) {
       // this is when a match is NOT found...
-      // printf("Found %d misspellings of the word %s\n",
-      // countMistakesForCurrentWord, fileData[i]);
+      // printf("Found %d misspellings of the word %s\n", countMistakesForCurrentWord, fileData[i]);
       (*countTotalMistakes) += countMistakesForCurrentWord;
       (*countInArr)++;
       unsigned int temp = *countInArr - 1;
@@ -636,13 +634,19 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
       // printf("size of mistakes array is now %d\n", (int)*countInArr);
       mistakesArr[temp].countErrors = countMistakesForCurrentWord;
       mistakesArr[temp].misspelledString = (char *) strdup(fileData[i]);
+      if (!mistakesArr[temp].misspelledString) {
+        fprintf(stderr, "strdup failed for mistakesArr misspelledString at index %d\n", temp);
+        free2DArray((void ***)(&dictionaryData), numEntriesDictionary);
+        free2DArray((void ***)(&fileData), numEntriesFile);
+        return NULL;
+      }
       mistakesArr[temp].dictionaryName = NULL;
       mistakesArr[temp].fileName = NULL;
       if (mistakesArr[temp].misspelledString == NULL) {
         printf("error with malloc for strdup\n");
         free2DArray((void ***)(&dictionaryData), numEntriesDictionary);
         free2DArray((void ***)(&fileData), numEntriesFile);
-        exit(EXIT_FAILURE);
+        return NULL;
       }
     }
   }
@@ -650,6 +654,8 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
   if (!mistakesArr) { // if there are no mistakes create the array and populate it with one entry
     mistakesArr = (spellingError *) malloc(sizeof(spellingError));
     if (!mistakesArr) {
+      free2DArray((void ***)(&dictionaryData), numEntriesDictionary);
+      free2DArray((void ***)(&fileData), numEntriesFile);
       perror("could not malloc mistake array inside compareFileData\n");
       return NULL;
     }
@@ -708,16 +714,17 @@ unsigned int binarySearchArrayOfStrings(const char **sortedDictionaryArrayOfStri
 
   // If the target substring is not found in the dictionary, count its occurrences in the file string array
   unsigned int count = 0;
-  // clock_t start, end;
-  // start = clock();
-  for (unsigned int i = 0; i < fileSize; i++) {
-    if (!strcmp(arrayOfFileStrings[i], target)) {
-      count++;
-    }
-  }
-  // count = numberOfStringMatchesInArrayOfStrings(arrayOfFileStrings, fileSize, target);
-  // end = clock();
-  // printFlush("Time to search for %s: %lf -- count: %u\n", target, ((double)(end - start)) / CLOCKS_PER_SEC, count);
+  clock_t start, end;
+  start = clock();
+
+  // for (unsigned int i = 0; i < fileSize; i++) {
+  //   if (!strcmp(arrayOfFileStrings[i], target)) {
+  //     count++;
+  //   }
+  // }
+  count = numberOfStringMatchesInArrayOfStrings(arrayOfFileStrings, fileSize, target);
+  end = clock();
+  printFlush("Time to search for %s: %lf -- count: %u\n", target, ((double)(end - start)) / CLOCKS_PER_SEC, count);
   return count;
 }
 
@@ -772,8 +779,12 @@ void quicksortStrings(char **arr, int left, int right) {
 
     // Partition
     while (i <= j) {
-      while (strcmp(arr[i], pivot) < 0) i++;
-      while (strcmp(arr[j], pivot) > 0) j--;
+      while (strcmp(arr[i], pivot) < 0)  {
+        i++;
+      }
+      while (strcmp(arr[j], pivot) > 0) {
+        j--;
+      }
       if (i <= j) {
         char *temp = arr[i];
         arr[i] = arr[j];
@@ -813,11 +824,7 @@ void freeArrayOfSpellingErrors(spellingError **arrayOfMistakes, unsigned int cou
   return;
 }
 
-bool verifySortedStr(const char **sortedArrayOfStrings,
-  const unsigned int numStrings) {
-  if (!sortedArrayOfStrings) {
-    return true;
-  }
+bool verifySortedStr(const char **sortedArrayOfStrings, const unsigned int numStrings) {
   const char *min = sortedArrayOfStrings[0];
   for (unsigned int i = 0; i < numStrings; i++) {
     if (strcmp(sortedArrayOfStrings[i], min) < 0) {
@@ -888,10 +895,7 @@ int printToLog(const char *debugFile, const char *stringLiteral, ...) {
 }
 
 void free2DArray(void ***addressOfGenericPointer, int numberOfInnerElements) {
-  if (addressOfGenericPointer == NULL) {
-    return;
-  }
-  if (* addressOfGenericPointer == NULL) {
+  if (addressOfGenericPointer == NULL || *addressOfGenericPointer == NULL) {
     return;
   }
   void **genericPointer = (void **) *addressOfGenericPointer;
@@ -940,25 +944,20 @@ char *getOutputString(threadArguments threadArgs) {
     free(errorsInEachFile);
     return NULL;
   }
-  for (unsigned int i = 0; i < numThreads; i++) {
-    numUniqueMisspelledWords[i] = countMistakesForThread(threadArgs.errorArray, size, i);
-    if (debugOutput) {
-      printToLog(debugFile, "number of unique errors for thread %d: %d\n", i + 1, numUniqueMisspelledWords[i]);
-    }
-  }
   const char *fileName = NULL, *mistake = NULL;
   unsigned int arrSize;
   unsigned int totalSize = 1; // start with one for \0
   for (unsigned int i = 0; i < numThreads; i++) {
+    numUniqueMisspelledWords[i] = countMistakesForThread(threadArgs.errorArray, size, i);
+    printToLog(debugFile, "number of unique errors for thread %d: %d\n", i + 1, numUniqueMisspelledWords[i]);
     // rough estimate for max size
-    arrSize = MAX_WORD_LENGTH *numUniqueMisspelledWords[i] +
-      MAX_FILE_NAME_LENGTH + max(numUniqueMisspelledWords[i] - 1, 0) * 2 + 2; // includes the n-1 ", " strings, \n, and \0
+    arrSize = MAX_WORD_LENGTH * numUniqueMisspelledWords[i] + MAX_FILE_NAME_LENGTH + max(numUniqueMisspelledWords[i] - 1, 0) * 2 + 2; // includes the n-1 ", " strings, \n, and \0
     totalSize += arrSize - 1;
     errorsInEachFile[i] = malloc(arrSize);
     if (!errorsInEachFile[i]) {
       fprintf(stderr, "malloc failed for errorsInEachFile[%d]\n", i);
       free(numUniqueMisspelledWords);
-      for (int j = 0; j < i; j++) {
+      for (unsigned int j = 0; j < i; j++) {
         free(errorsInEachFile[j]);
       }
       free(errorsInEachFile);
@@ -969,7 +968,7 @@ char *getOutputString(threadArguments threadArgs) {
       sprintf(errorsInEachFile[i], "NO INPUT FILE FOR THREAD %d (or file was empty)\n", i + 1);
     } else {
       sprintf(errorsInEachFile[i], "File %d (%s): ", i + 1, fileName);
-      for (int j = 0; j < numUniqueMisspelledWords[i]; j++) {
+      for (unsigned int j = 0; j < numUniqueMisspelledWords[i]; j++) {
         mistake = getMistakeAtIndex(threadArgs.errorArray, i, j, size);
         if (mistake) {
           strcat(errorsInEachFile[i], mistake);
@@ -999,17 +998,15 @@ char *getOutputString(threadArguments threadArgs) {
   return outputString;
 }
 
-char *generateSummary(spellingError *errorArr, unsigned int numThreads,
-  unsigned int arrayLength, char *inputString, unsigned int numSuccessfulThreads) {
+char *generateSummary(spellingError *errorArr, unsigned int numThreads, unsigned int arrayLength, char *inputString, unsigned int numSuccessfulThreads) {
   char formatString[250] = "";
   sprintf(formatString, "Number of files processed: %d\n", numSuccessfulThreads);
-  unsigned int biggest = 0, secondBiggest = 0, thirdBiggest = 0,
-    totalErrors = 0;
+  unsigned int biggest = 0, secondBiggest = 0, thirdBiggest = 0, totalErrors = 0;
   char *biggestStr = NULL, *secondBiggestStr = NULL, *thirdBiggestStr = NULL;
 
   // printFlush("LENGTH OF input string: %d\n", (int)strlen(inputString));
 
-  for (int i = 0; i < arrayLength; i++) {
+  for (unsigned int i = 0; i < arrayLength; i++) {
     spellingError current = errorArr[i];
     if (current.countErrors && current.misspelledString) {
       if (current.countErrors > biggest) {
@@ -1028,10 +1025,9 @@ char *generateSummary(spellingError *errorArr, unsigned int numThreads,
   inputString = realloc(inputString, strlen(inputString) + strlen(formatString) + 1);
   strcat(inputString, formatString);
   sprintf(formatString, "Number of spelling errors: %d\n", totalErrors);
-  inputString = realloc(inputString, strlen(inputString) + strlen(formatString) + 1);
-  strcat(inputString, formatString);
-  char numWordsToPrint =
-    (biggest != 0) + (secondBiggest != 0) + (thirdBiggest != 0);
+  // inputString = realloc(inputString, strlen(inputString) + strlen(formatString) + 1);
+  // strcat(inputString, formatString);
+  char numWordsToPrint = (biggest != 0) + (secondBiggest != 0) + (thirdBiggest != 0);
   switch (numWordsToPrint) {
   case 1:
     inputString = realloc(inputString, strlen(inputString)  + strlen("Most common misspelling: ") + 1);
@@ -1054,23 +1050,21 @@ char *generateSummary(spellingError *errorArr, unsigned int numThreads,
     if (i == 0) {
       sprintf(formatString, "%s (%d times)", biggestStr, biggest);
     } else if (i == 1) {
-      sprintf(formatString, "%s (%d times)", secondBiggestStr,
-        secondBiggest);
+      sprintf(formatString, "%s (%d times)", secondBiggestStr, secondBiggest);
     } else if (i == 2) {
-      sprintf(formatString, "%s (%d times)", thirdBiggestStr,
-        thirdBiggest);
+      sprintf(formatString, "%s (%d times)", thirdBiggestStr, thirdBiggest);
     }
     inputString = realloc(inputString, strlen(inputString)  + strlen(formatString) + 1);
     if (!inputString) {
       perror("input string realloc failed inside generateSummary\n");
-      return NULL;
+      exit(EXIT_FAILURE);
     }
     strcat(inputString, formatString);
     if (i < numWordsToPrint - 1) {
       inputString = realloc(inputString, strlen(inputString)  + 3);
       if (!inputString) {
         perror("input string realloc failed inside generateSummary\n");
-        return NULL;
+        exit(EXIT_FAILURE);
       }
       strcat(inputString, ", ");
     }
@@ -1078,8 +1072,8 @@ char *generateSummary(spellingError *errorArr, unsigned int numThreads,
   return inputString;
 }
 
-const char *getMistakeAtIndex(spellingError *arr, int threadNum, int index, unsigned int numElements) {
-  int count = 0;
+const char *getMistakeAtIndex(spellingError *arr, unsigned int threadNum, unsigned int index, unsigned int numElements) {
+  unsigned int count = 0;
   for (int i = 0; i < numElements; i++) {
     if (arr[i].threadID == threadNum) {
       if (count != index) {
@@ -1118,8 +1112,7 @@ unsigned int max(unsigned int a, unsigned int b) {
   return a < b ? b : a;
 }
 
-void printToOutputFile(const char *fileName,
-  const char *stringToPrint) {
+void printToOutputFile(const char *fileName, const char *stringToPrint) {
   int fd;
   if (firstWriteThreadOutput) {
     // create if it does not exist.
@@ -1128,12 +1121,10 @@ void printToOutputFile(const char *fileName,
       return;
     }
     firstWriteThreadOutput = false;
-  } else {
+  } else if ((fd = open(fileName, O_CREAT | O_WRONLY | O_APPEND, 0644)) == -1) {
     // open for appending
-    if ((fd = open(fileName, O_CREAT | O_WRONLY | O_APPEND, 0644)) == -1) {
-      fprintf(stderr, "Error opening spellcheck file %s\n", fileName);
-      return;
-    }
+    fprintf(stderr, "Error opening spellcheck file %s\n", fileName);
+    return;
   }
   // Write the formatted string to the debug file
   if (write(fd, stringToPrint, strlen(stringToPrint)) == -1) {

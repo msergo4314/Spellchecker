@@ -1,3 +1,4 @@
+// #ifndef "header.h"
 #define _POSIX_C_SOURCE 200809L // most likely won't need
 #define MAX_WORD_LENGTH 40
 #define MAX_FILE_NAME_LENGTH 50
@@ -50,7 +51,7 @@ typedef struct threadArgs {
   unsigned int numThreadsInUse;
 } threadArguments;
 
-enum StringTypes {ALPHA_ONLY, INTEGER, FLOAT, MIXED};
+enum StringTypes {ALPHA_ONLY, UINTEGER, FLOAT, MIXED};
 enum ReturnTypes {FAILURE = EXIT_FAILURE, SUCCESS = EXIT_SUCCESS, ALTERNATE_SUCCESS = -1};
 
 // _Atomic unsigned int numThreadsStarted; // atomic varaibles are also an option if you don't want to use mutexes (but can't be used for everything anyway)
@@ -80,13 +81,13 @@ bool verifySortedStr(const char ** sortedArrayOfStrings, const unsigned int numS
 int partitionSpellingErrorArr(spellingError *arr, int start, int end);
 void quickSortSpellingErrorArr(spellingError *arr, int start, int end);
 int printToLog(const char *debugFile, const char *stringLiteral, ...);
-char* getNonAlphabeticalCharsString(void);
+void getNonAlphabeticalCharsString(char *buffer);
 unsigned int max(unsigned int a, unsigned int b);
 // unsigned int numStringMismatchesInStrings(const char *dictionaryString, const char *target);
 char* getOutputString (threadArguments threadArgsPtr);
 unsigned int countMistakesForThread(spellingError *errorArr, unsigned int numEntriesInArr, int index);
 const char *getFileNameFromThreadID(spellingError *arr, int index, unsigned int numElements);
-const char *getMistakeAtIndex(spellingError *arr, int threadNum, int index, unsigned int numElements);
+const char *getMistakeAtIndex(spellingError *arr, unsigned int threadNum, unsigned int index, unsigned int numElements);
 char *generateSummary(spellingError *errorArr, unsigned int numThreads, unsigned int arrayLength, char *inputString, unsigned int numSuccessfulThreads);
 int writeThreadToFile(const char *fileName, spellingError *listOfMistakes, unsigned int numElements);
 void printToOutputFile(const char *fileName, const char* stringToPrint);
