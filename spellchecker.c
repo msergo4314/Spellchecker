@@ -574,7 +574,6 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
   *countTotalMistakes = 0;
   *countInArr = 0;
   spellingError *mistakesArr = NULL; // no entries yet
-  unsigned int countMistakesForCurrentWord = 0;
   
   clock_t start, end;
   start = clock();
@@ -585,7 +584,6 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
   quicksortStrings((char **) fileData, 0, numEntriesFile - 1);
   end = clock();
   printFlush("Time to sort spellcheck file: %lf\n", ((double)(end - start)) / CLOCKS_PER_SEC);
-  // printf("size of clock_t: %lu\n", sizeof(clock_t));
   if (!verifySortedStr(dictionaryData, numEntriesDictionary) || !verifySortedStr(fileData, numEntriesFile)) {
     printFlush("SORT FAILED!");
     free2DArray((void ***)(&dictionaryData), numEntriesDictionary);
@@ -593,22 +591,21 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
     return NULL;
   }
   bool flag = false;
-  char **seenWords = malloc(sizeof(char *) *numEntriesFile);
+  uniqueFileWord *seenWords = (uniqueFileWord *)calloc(numEntriesFile, sizeof(uniqueFileWord));
   if (!seenWords) {
-    if (printToLog(debugFile, "failed malloc inside compareFileData\n") == ALTERNATE_SUCCESS) {
-      fprintf(stderr, "failed malloc inside compareFileData\n");
+    if (printToLog(debugFile, "failed calloc inside compareFileData\n") == ALTERNATE_SUCCESS) {
+      fprintf(stderr, "failed calloc inside compareFileData\n");
     }
     free2DArray((void ***)(&dictionaryData), numEntriesDictionary);
     free2DArray((void ***)(&fileData), numEntriesFile);
     return NULL;
   }
-  for (int i = 0; i < numEntriesFile; i++) {
-    seenWords[i] = NULL;
-  }
+  // printf("REACHED. %d entries in file.\n", numEntriesFile);
+  unsigned int lenSeenWords = 0;
   for (int i = 0; i < numEntriesFile; i++) { // for each word in the file...
     flag = false;
     for (int j = 0; j < i; j++) {
-      if (seenWords[j] != NULL && fileData[i] && strcmp(fileData[i], seenWords[j]) == 0) {
+      if (seenWords[j].uniqeWord && strcmp(fileData[i], seenWords[j].uniqeWord) == 0) {
         flag = true; // Word already seen
         break;
       }
@@ -616,28 +613,40 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
     if (flag) {
       continue;
     }
-    seenWords[i] = strdup(fileData[i]);
-    if (!seenWords[i]) {
+    seenWords[lenSeenWords].uniqeWord = strdup(fileData[i]);
+    seenWords[lenSeenWords].occurances = numberOfStringMatchesInArrayOfStrings(fileData, numEntriesFile, fileData[i]);
+    // printf("seenWords word at index %d: %s\n", seenWordsIndex, seenWords[seenWordsIndex].uniqeWord);
+    // printf("seenWords count for word %s: %d\n", seenWords[seenWordsIndex].uniqeWord, seenWords[seenWordsIndex].occurances);
+    if (!(seenWords[lenSeenWords++].uniqeWord)) {
       perror("strdup failed for seenwords inside comparison function\n");
       free2DArray((void ***)(&dictionaryData), numEntriesDictionary);
       free2DArray((void ***)(&fileData), numEntriesFile);
       return NULL;
     }
-      if ((countMistakesForCurrentWord = binarySearchArrayOfStrings((const char **)dictionaryData, numEntriesDictionary, (const char**)fileData, numEntriesFile, (const char *)fileData[i])) > 0) {
+  }
+  // printf("before while loop...\n");
+  // printf("after while loop. %u unique words\n", lenSeenWords);
+  for (unsigned int i = 0; i < lenSeenWords; i++) {
+    uniqueFileWord currentWord = seenWords[i];
+    if ((numberOfStringMatchesInArrayOfStrings(dictionaryData, numEntriesDictionary, currentWord.uniqeWord)) == 0) {
       // if ((countMistakesForCurrentWord = numStringMismatchesInArrayOfStrings(dictionaryData, fileData, numEntriesDictionary, numEntriesFile, (const char *)fileData[i])) > 0) {
-      // this is when a match is NOT found...
+      // this is when a match is NOT found in the dictionary...
       // printf("Found %d misspellings of the word %s\n", countMistakesForCurrentWord, fileData[i]);
-      (*countTotalMistakes) += countMistakesForCurrentWord;
+      (*countTotalMistakes) += seenWords[i].occurances;
+      unsigned int temp = *countInArr;
       (*countInArr)++;
-      unsigned int temp = *countInArr - 1;
-      mistakesArr = (spellingError *) realloc(mistakesArr, ((temp + 1) *sizeof(spellingError)));
+      mistakesArr = (spellingError *) realloc(mistakesArr, ((temp + 1) * sizeof(spellingError)));
       // printf("size of mistakes array is now %d\n", (int)*countInArr);
-      mistakesArr[temp].countErrors = countMistakesForCurrentWord;
-      mistakesArr[temp].misspelledString = (char *) strdup(fileData[i]);
+      mistakesArr[temp].countErrors = currentWord.occurances;
+      mistakesArr[temp].misspelledString = (char *) strdup(currentWord.uniqeWord);
       if (!mistakesArr[temp].misspelledString) {
         fprintf(stderr, "strdup failed for mistakesArr misspelledString at index %d\n", temp);
         free2DArray((void ***)(&dictionaryData), numEntriesDictionary);
         free2DArray((void ***)(&fileData), numEntriesFile);
+        for (unsigned int i = 0; i < lenSeenWords; i++) {
+          free(seenWords[i].uniqeWord);
+        }
+        free(seenWords);
         return NULL;
       }
       mistakesArr[temp].dictionaryName = NULL;
@@ -646,11 +655,18 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
         printf("error with malloc for strdup\n");
         free2DArray((void ***)(&dictionaryData), numEntriesDictionary);
         free2DArray((void ***)(&fileData), numEntriesFile);
+        for (unsigned int i = 0; i < lenSeenWords; i++) {
+          free(seenWords[i].uniqeWord);
+        }
+        free(seenWords);
         return NULL;
       }
     }
   }
-  free2DArray((void ***)&seenWords, numEntriesFile);
+  for (unsigned int i = 0; i < lenSeenWords; i++) {
+    free(seenWords[i].uniqeWord);
+  }
+  free(seenWords);
   if (!mistakesArr) { // if there are no mistakes create the array and populate it with one entry
     mistakesArr = (spellingError *) malloc(sizeof(spellingError));
     if (!mistakesArr) {
@@ -694,20 +710,24 @@ unsigned int binarySearchArrayOfStrings(const char **sortedDictionaryArrayOfStri
   }
   unsigned int left = 0, right = dictionarySize - 1, mid;
   int comparison;
+  clock_t f_start, f_end;
+  f_start = clock();
   while (left <= right) {
     mid = left + (right - left) / 2;
     // printf("midpoint of %u and %u is: %u\n", left, right, mid);
     comparison = strcmp(sortedDictionaryArrayOfStrings[mid], target);
     if (comparison == 0) {
       // Target substring exists in the dictionary, return 0
+      f_end = clock();
+      printFlush("Total time for search function: %lf\n", ((double)(f_end - f_start)) / CLOCKS_PER_SEC);
       return 0;
     } else if (comparison < 0) {
       left = mid + 1; // If target is greater, ignore left half
     } else {
-      if (mid == 0) {
-        break;
-      }
       right = mid - 1; // If target is smaller, ignore right half
+      if (mid == 0) {
+        right = 0;
+      }
     }
   }
   // printf("%s not in dictionary file\n", target);
@@ -725,6 +745,8 @@ unsigned int binarySearchArrayOfStrings(const char **sortedDictionaryArrayOfStri
   count = numberOfStringMatchesInArrayOfStrings(arrayOfFileStrings, fileSize, target);
   end = clock();
   printFlush("Time to search for %s: %lf -- count: %u\n", target, ((double)(end - start)) / CLOCKS_PER_SEC, count);
+  f_end = clock();
+  printFlush("Total time for search function: %lf\n", ((double)(f_end - f_start)) / CLOCKS_PER_SEC);
   return count;
 }
 
@@ -764,7 +786,7 @@ unsigned int numberOfStringMatchesInArrayOfStrings(const char **arrayOfStrings, 
     } else {
       right = mid - 1; // If target is smaller, ignore right half
       if (mid == 0) {
-        break;
+        right = 0;
       }
     }
   }
@@ -840,7 +862,7 @@ bool verifySortedStr(const char **sortedArrayOfStrings, const unsigned int numSt
 //   if (!arrayOfSpellingErrors || numElements < 1) {
 //     return true;
 //   }
-//   const unsigned int min = arrayOfSpellingErrors[0].countErrors;
+//   unsigned int min = arrayOfSpellingErrors[0].countErrors;
 //   for (unsigned int i = 0; i < numElements; i++) {
 //     if (arrayOfSpellingErrors[i].countErrors < min) {
 //       // printf("int %d is less than %d\n",
@@ -900,7 +922,7 @@ void free2DArray(void ***addressOfGenericPointer, int numberOfInnerElements) {
   }
   void **genericPointer = (void **) *addressOfGenericPointer;
   for (int i = 0; i < numberOfInnerElements; i++) {
-    if ((* addressOfGenericPointer)[i]) {
+    if ((*addressOfGenericPointer)[i]) {
       free(genericPointer[i]);
       genericPointer[i] = NULL;
     }
@@ -1028,19 +1050,19 @@ char *generateSummary(spellingError *errorArr, unsigned int numThreads, unsigned
   // inputString = realloc(inputString, strlen(inputString) + strlen(formatString) + 1);
   // strcat(inputString, formatString);
   char numWordsToPrint = (biggest != 0) + (secondBiggest != 0) + (thirdBiggest != 0);
+  char *newStr = NULL;
   switch (numWordsToPrint) {
-  case 1:
-    inputString = realloc(inputString, strlen(inputString)  + strlen("Most common misspelling: ") + 1);
-    strcat(inputString, "Most common misspelling: ");
-    break;
-  case 2:
-    inputString = realloc(inputString, strlen(inputString) + strlen("Two most common misspellings: ") + 1);
-    strcat(inputString, "Two most common misspellings: ");
-    break;
-  case 3:
-    inputString = realloc(inputString, strlen(inputString)  + strlen("Three most common misspellings: ") + 1);
-    strcat(inputString, "Three most common misspellings: ");
+    case 1:
+      newStr = "Most common misspelling: ";
+      break;
+    case 2:
+      newStr = "Two most common misspellings: ";
+      break;
+    case 3:
+      newStr = "Three most common misspellings: ";
   }
+  inputString = realloc(inputString, strlen(inputString)  + strlen(newStr) + 1);
+  strcat(inputString, newStr);
   if (!(biggest || secondBiggest || thirdBiggest)) {
     inputString = realloc(inputString, strlen(inputString)  + strlen("No mistakes!") + 1);
     strcat(inputString, "No mistakes!");
@@ -1108,7 +1130,7 @@ const char *getFileNameFromThreadID(spellingError *arr, int index, unsigned int 
   return NULL;
 }
 
-unsigned int max(unsigned int a, unsigned int b) {
+int max(int a, int b) {
   return a < b ? b : a;
 }
 

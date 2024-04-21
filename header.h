@@ -39,6 +39,11 @@ typedef struct mistake {
   unsigned int threadID;
 } spellingError;
 
+typedef struct uniqueFileWord {
+  char *uniqeWord;
+  unsigned int occurances;
+} uniqueFileWord;
+
 // functionally this struct is both input and output for thread functions
 typedef struct threadArgs {
   char *dictionaryFileName;
@@ -82,7 +87,7 @@ int partitionSpellingErrorArr(spellingError *arr, int start, int end);
 void quickSortSpellingErrorArr(spellingError *arr, int start, int end);
 int printToLog(const char *debugFile, const char *stringLiteral, ...);
 void getNonAlphabeticalCharsString(char *buffer);
-unsigned int max(unsigned int a, unsigned int b);
+int max(int a, int b);
 // unsigned int numStringMismatchesInStrings(const char *dictionaryString, const char *target);
 char* getOutputString (threadArguments threadArgsPtr);
 unsigned int countMistakesForThread(spellingError *errorArr, unsigned int numEntriesInArr, int index);
