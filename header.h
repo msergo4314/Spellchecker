@@ -30,6 +30,7 @@ bool firstWriteThreadOutput = true;
 
 const bool debugOutput = false; // flag for extra prints to file
 const bool detailedDebug = false;
+const char* dictionaryAbsPath = "/mnt/c/global c/dictionary.txt";
 
 typedef struct mistake {
   unsigned int countErrors;

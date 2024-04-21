@@ -44,11 +44,11 @@ int main(int argc, char **argv) {
   // struct for thread arguments
   threadArguments args = {0}; // set all to 0, threads will update values
   start_time = clock();
-  // char cwd[1024];
-  // if (getcwd(cwd, sizeof(cwd)) != NULL) {
-  //     printf("Current working directory: %s\n", cwd);
-  //     // Use cwd to construct file paths relative to the current directory
-  // }
+  char cwd[1024 + MAX_FILE_NAME_LENGTH + 1];
+  if (getcwd(cwd, sizeof(cwd)) != NULL) {
+      printf("Current working directory: %s\n", cwd);
+      // Use cwd to construct file paths relative to the current directory
+  }
   main_menu:
     printf("Main Menu:\n");
   printf("1. Start a new spellchecking task\n2. Exit\n\n");
@@ -79,7 +79,7 @@ int main(int argc, char **argv) {
         goto main_menu;
       }
     } else {
-      strcpy(fileNameString, "dictionary.txt");
+      strcpy(fileNameString, dictionaryAbsPath);
     }
     args.dictionaryFileName = realloc(args.dictionaryFileName, strlen(fileNameString) + 1);
     if (!args.dictionaryFileName) {
@@ -240,12 +240,7 @@ void *threadFunction(void *vargp) {
     printToLog(debugFile, "split file is:\n\n");
   }
   unsigned int wordCountFile = 0;
-  // printf("file to check (spellcheckfile): %s\n", spellcheckFileName);
-  clock_t start, end;
-  start = clock();
   fileArrayOfStrings = readFileArray(spellcheckFileName, &wordCountFile);
-  end = clock();
-  printf("time to read file %s: %lf s\n", spellcheckFileName, (double)(end - start) / CLOCKS_PER_SEC);
   if (fileArrayOfStrings == NULL) {
     // fprintf(stderr, "Reading words array from file failed!\n"); 
     goto exit_failure;
@@ -302,12 +297,14 @@ void *threadFunction(void *vargp) {
   pthread_mutex_unlock(&lock);
   quickSortSpellingErrorArr(mistakes, 0, countInArr - 1); // sort high to low
   // do file IO with sorted results
-  if (writeThreadToFile(threadOutputFile, mistakes, countInArr) == FAILURE) {
-    fprintf(stderr, "error with logging output of thread analysis to file %s!\n", threadOutputFile);
-    free(mistakes);
-    freeArrayOfSpellingErrors(&mistakes, data -> prevSize);
-    goto exit_failure;
-  }
+
+  // if (writeThreadToFile(threadOutputFile, mistakes, countInArr) == FAILURE) {
+  //   fprintf(stderr, "error with logging output of thread analysis to file %s!\n", threadOutputFile);
+  //   free(mistakes);
+  //   freeArrayOfSpellingErrors(&mistakes, data -> prevSize);
+  //   goto exit_failure;
+  // }
+  
   // exit success
   pthread_mutex_lock(&lock);
   free(mistakes);
@@ -389,7 +386,7 @@ char *readEntireFileIntoStr(const char *fileName, unsigned int *sizeBytes) {
   int fd;
   // pthread_mutex_lock(&lock);
   if ((fd = open(fileName, O_RDONLY)) == -1) {
-    printf("bad file descriptor. File most likely does not exist\n");
+    printf("bad file descriptor. File %s most likely does not exist\n", fileName);
     return NULL;
   }
   int size = lseek(fd, 0, SEEK_END); // sizeof file in bytes
@@ -457,21 +454,11 @@ char **readFileArray(const char *fileName, unsigned int *wordCount) {
   unsigned int sizeBytes;
   char **stringArrToReturn = NULL;
   char *singleFileString;
-  clock_t start, end;
-  start = clock();
   if (!(singleFileString = readEntireFileIntoStr(fileName, &sizeBytes))) {
     return NULL;
   }
-  end = clock();
-  printf("Time to read entire file into one string: %lf s\n", (double)(end - start) / CLOCKS_PER_SEC);
-  start = clock();
   convertEntireStringToLower(singleFileString);
-  end = clock();
-  printf("Time to lowercase whole string: %lf s\n", (double)(end - start) / CLOCKS_PER_SEC);
-  start = clock();
   stringArrToReturn = splitStringOnWhiteSpace(singleFileString, wordCount);
-  end = clock();
-  printf("Time to split based on whitespace: %lf s\n", (double)(end - start) / CLOCKS_PER_SEC);
   free(singleFileString);
   if (stringArrToReturn == NULL) {
     return NULL;
@@ -480,6 +467,10 @@ char **readFileArray(const char *fileName, unsigned int *wordCount) {
 }
 
 void convertEntireStringToLower(char *string) {
+  if (!string) {
+    // best to check in case
+    return;
+  }
   for (long long unsigned int index = 0; string[index]; index++) {
     // it is faster to NOT use tolower() conditionally...so just call it every time
     string[index] = tolower(string[index]);
@@ -590,16 +581,16 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
   *countInArr = 0;
   spellingError *mistakesArr = NULL; // no entries yet
   
-  clock_t start, end, f_start, f_end;
-  f_start = clock();
-  start = clock();
+  // clock_t start, end, f_start, f_end;
+  // f_start = clock();
+  // start = clock();
   quicksortStrings((char **) dictionaryData, 0, numEntriesDictionary - 1);
-  end = clock();
-  printFlush("Time to sort dictionary: %lf\n", ((double)(end - start)) / CLOCKS_PER_SEC);
-  start = clock();
+  // end = clock();
+  // printFlush("Time to sort dictionary: %lf\n", ((double)(end - start)) / CLOCKS_PER_SEC);
+  // start = clock();
   quicksortStrings((char **) fileData, 0, numEntriesFile - 1);
-  end = clock();
-  printFlush("Time to sort spellcheck file: %lf\n", ((double)(end - start)) / CLOCKS_PER_SEC);
+  // end = clock();
+  // printFlush("Time to sort spellcheck file: %lf\n", ((double)(end - start)) / CLOCKS_PER_SEC);
   bool flag = false;
   uniqueFileWord *seenWords = (uniqueFileWord *)calloc(numEntriesFile, sizeof(uniqueFileWord));
   if (!seenWords) {
@@ -625,8 +616,6 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
     }
     seenWords[lenSeenWords].uniqeWord = strdup(fileData[i]);
     seenWords[lenSeenWords].occurances = numberOfStringMatchesInArrayOfStrings(fileData, numEntriesFile, fileData[i]);
-    // printf("seenWords word at index %d: %s\n", seenWordsIndex, seenWords[seenWordsIndex].uniqeWord);
-    // printf("seenWords count for word %s: %d\n", seenWords[seenWordsIndex].uniqeWord, seenWords[seenWordsIndex].occurances);
     if (!(seenWords[lenSeenWords++].uniqeWord)) {
       perror("strdup failed for seenwords inside comparison function\n");
       free2DArray((void ***)(&dictionaryData), numEntriesDictionary);
@@ -691,8 +680,8 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
     mistakesArr[0].fileName = NULL;
     (*countInArr) = 1;
   }
-  f_end = clock();
-  printFlush("Time to fully process spelling error file with dictionary: %lf\n", ((double)(f_end - f_start)) / CLOCKS_PER_SEC);
+  // f_end = clock();
+  // printFlush("Time to fully process spelling error file with dictionary: %lf\n", ((double)(f_end - f_start)) / CLOCKS_PER_SEC);
   return mistakesArr;
 }
 
