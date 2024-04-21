@@ -193,8 +193,19 @@ void *threadFunction(void *vargp) {
   unsigned int threadID = data -> numThreadsStarted;
   data -> numThreadsStarted++;
   char *dictionaryFileName = malloc(strlen(data->dictionaryFileName) + 1);
+  if (!dictionaryFileName) {
+    perror("could not malloc dictionary file name inside thread function\n");
+    pthread_mutex_unlock(&lock);
+    return NULL;
+  }
   strcpy(dictionaryFileName, data->dictionaryFileName);
   char *spellcheckFileName = malloc(strlen(data->spellcheckFileName) + 1);
+  if (!spellcheckFileName) {
+    free(dictionaryFileName);
+    perror("could not malloc spellcheck file name inside thread function\n");
+    pthread_mutex_unlock(&lock);
+    return NULL;
+  }
   strcpy(spellcheckFileName, data->spellcheckFileName);
   // printFlush("Thread ID: %d\n", pthread_self());
   char **fileArrayOfStrings = NULL;
@@ -230,7 +241,11 @@ void *threadFunction(void *vargp) {
   }
   unsigned int wordCountFile = 0;
   // printf("file to check (spellcheckfile): %s\n", spellcheckFileName);
+  clock_t start, end;
+  start = clock();
   fileArrayOfStrings = readFileArray(spellcheckFileName, &wordCountFile);
+  end = clock();
+  printf("time to read file %s: %lf s\n", spellcheckFileName, (double)(end - start) / CLOCKS_PER_SEC);
   if (fileArrayOfStrings == NULL) {
     // fprintf(stderr, "Reading words array from file failed!\n"); 
     goto exit_failure;
@@ -442,11 +457,21 @@ char **readFileArray(const char *fileName, unsigned int *wordCount) {
   unsigned int sizeBytes;
   char **stringArrToReturn = NULL;
   char *singleFileString;
+  clock_t start, end;
+  start = clock();
   if (!(singleFileString = readEntireFileIntoStr(fileName, &sizeBytes))) {
     return NULL;
   }
+  end = clock();
+  printf("Time to read entire file into one string: %lf s\n", (double)(end - start) / CLOCKS_PER_SEC);
+  start = clock();
   convertEntireStringToLower(singleFileString);
+  end = clock();
+  printf("Time to lowercase whole string: %lf s\n", (double)(end - start) / CLOCKS_PER_SEC);
+  start = clock();
   stringArrToReturn = splitStringOnWhiteSpace(singleFileString, wordCount);
+  end = clock();
+  printf("Time to split based on whitespace: %lf s\n", (double)(end - start) / CLOCKS_PER_SEC);
   free(singleFileString);
   if (stringArrToReturn == NULL) {
     return NULL;
@@ -456,9 +481,8 @@ char **readFileArray(const char *fileName, unsigned int *wordCount) {
 
 void convertEntireStringToLower(char *string) {
   for (long long unsigned int index = 0; string[index]; index++) {
-    if (isalpha(string[index])) {
-      string[index] = tolower(string[index]);
-    }
+    // it is faster to NOT use tolower() conditionally...so just call it every time
+    string[index] = tolower(string[index]);
   }
 }
 
@@ -482,16 +506,14 @@ char **splitStringOnWhiteSpace(const char *inputString, unsigned int *wordCount)
   unsigned int wordCountLocal = 0;
   bool prevWasWhitespace = true;
   // Count the number of words
-  const char *ptr;
   char character;
-  for (ptr = inputString; *ptr != '\0'; ptr++) {
+  for (const char *ptr = inputString; *ptr != '\0'; ptr++) {
     character = *ptr;
     if (!(isalpha(character) || character == '\'')) { // apostrophe is special case
       if (prevWasWhitespace) {
         continue; // ignore whitespaces until non-whitespace char found
-      } else {
-        prevWasWhitespace = true;
       }
+      prevWasWhitespace = true;
       wordCountLocal++;
     } else {
       prevWasWhitespace = false;
@@ -506,29 +528,22 @@ char **splitStringOnWhiteSpace(const char *inputString, unsigned int *wordCount)
     return NULL;
   }
   // Allocate memory for array of strings
-  char **words = (char **) malloc((wordCountLocal) *sizeof(char *));
+  char **words = (char **) calloc(wordCountLocal, sizeof(char *));
   if (words == NULL) {
-    if (printToLog(debugFile, "Memory allocation failed for words arr\n") == ALTERNATE_SUCCESS) {
-      fprintf(stderr, "Memory allocation failed for words arr\n");
-    }
+    fprintf(stderr, "Memory allocation failed for words arr\n");
     *wordCount = wordCountLocal;
     return NULL;
-  }
-  for (int i = 0; i < wordCountLocal; i++) {
-    words[i] = NULL; // useful if words is freed before the inner ptrs are set
   }
   char delimiters[CHAR_MAX - CHAR_MIN + 1] = "";
   getNonAlphabeticalCharsString(delimiters);
   // printf("delims: %s\n", delimiters);
   char *token = strtok((char *) inputString, delimiters); // cast to char *
   int index = 0;
-  while (token != NULL && index < wordCountLocal) {
+  while (token != NULL) {
     words[index] = strdup(token); // Allocate memory for each word
     if (words[index] == NULL) {
-      if (printToLog(debugFile, "Memory allocation failed for strdup inside splitOnWhitespace") == ALTERNATE_SUCCESS) {
-        fprintf(stderr, "Memory allocation failed for strdup inside splitOnWhitespace");
-      }
-      free2DArray((void ***)&words, index);
+      fprintf(stderr, "Memory allocation failed for strdup inside splitOnWhitespace");
+      free2DArray((void ***)&words, wordCountLocal);
       *wordCount = wordCountLocal;
       return NULL;
     }
@@ -683,9 +698,7 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
 
 unsigned int numberOfStringMatchesInArrayOfStrings(const char **arrayOfStrings, unsigned int numStrings, const char *target) {
   // Assume sorted input, use binary search
-  int left = 0, right = numStrings - 1, mid;
-  int comparison;
-  int count = 0; // Initialize count for matches
+  int left = 0, right = numStrings - 1, mid, comparison, count = 0;
   while (left <= right) {
     mid = left + (right - left) / 2;
     comparison = strcmp(arrayOfStrings[mid], target);
@@ -959,6 +972,7 @@ char *generateSummary(spellingError *errorArr, unsigned int numThreads, unsigned
       break;
     case 3:
       newStr = "Three most common misspellings: ";
+      break;
     default:
       // if there are no mistakes at all
       newStr = "No mistakes!";
