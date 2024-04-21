@@ -41,7 +41,7 @@ typedef struct mistake {
 } spellingError;
 
 typedef struct uniqueFileWord {
-  char *uniqeWord;
+  char *uniqueWord;
   unsigned int occurances;
 } uniqueFileWord;
 
