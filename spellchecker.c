@@ -319,7 +319,7 @@ int writeThreadToFile(const char *fileName, spellingError *listOfMistakes, unsig
     totalErrors += listOfMistakes[i].countErrors;
   }
   printToLog(debugFile, "total errors for file %s: %d\n", currentFileName, totalErrors);
-  size_t strSize = strlen(currentFileName) + getNumDigitsInNumber(totalErrors, 10) + 3; // extra 3 for two spaces and \0
+  size_t strSize = strlen(currentFileName) + getNumDigitsInPositiveNumber(totalErrors, 10) + 3; // extra 3 for two spaces and \0
   str = malloc(strSize);
   if (!str) {
     perror("malloc failed inside writeThreadToFile\n");
@@ -575,7 +575,8 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
   *countInArr = 0;
   spellingError *mistakesArr = NULL; // no entries yet
   
-  clock_t start, end;
+  clock_t start, end, f_start, f_end;
+  f_start = clock();
   start = clock();
   quicksortStrings((char **) dictionaryData, 0, numEntriesDictionary - 1);
   end = clock();
@@ -584,12 +585,6 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
   quicksortStrings((char **) fileData, 0, numEntriesFile - 1);
   end = clock();
   printFlush("Time to sort spellcheck file: %lf\n", ((double)(end - start)) / CLOCKS_PER_SEC);
-  if (!verifySortedStr(dictionaryData, numEntriesDictionary) || !verifySortedStr(fileData, numEntriesFile)) {
-    printFlush("SORT FAILED!");
-    free2DArray((void ***)(&dictionaryData), numEntriesDictionary);
-    free2DArray((void ***)(&fileData), numEntriesFile);
-    return NULL;
-  }
   bool flag = false;
   uniqueFileWord *seenWords = (uniqueFileWord *)calloc(numEntriesFile, sizeof(uniqueFileWord));
   if (!seenWords) {
@@ -681,80 +676,16 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
     mistakesArr[0].fileName = NULL;
     (*countInArr) = 1;
   }
-  return mistakesArr;
-}
-
-unsigned int numStringMismatchesInArrayOfStrings(const char **arrayOfDictionaryStrings, const char **arrayOfFileStrings,
-  unsigned int sizeDictionary, unsigned int sizeFile, const char *target) {
-  // retuns number of matches found
-  // assumes that arrayOfDictionaryStrings is valid (no checks!)
-  for (int i = 0; i < sizeDictionary; i++) {
-    if (!strcmp(arrayOfDictionaryStrings[i], target)) {
-      return 0; // if a match does exist in the dictionary, the word is valid/correct
-    }
-  }
-  unsigned int count = 0;
-  for (int i = 0; i < sizeFile; i++) {
-    if (!strcmp(arrayOfFileStrings[i], target)) {
-      count++;
-    }
-  }
-  return count; // Target string not found
-}
-
-unsigned int binarySearchArrayOfStrings(const char **sortedDictionaryArrayOfStrings, unsigned int dictionarySize,
-                                        const char **arrayOfFileStrings, unsigned int fileSize, const char *target) {
-  // Binary search in the dictionary array
-  if (sortedDictionaryArrayOfStrings == NULL || arrayOfFileStrings == NULL || *sortedDictionaryArrayOfStrings == NULL || *arrayOfFileStrings == NULL || target == NULL) {
-    return 0;
-  }
-  unsigned int left = 0, right = dictionarySize - 1, mid;
-  int comparison;
-  clock_t f_start, f_end;
-  f_start = clock();
-  while (left <= right) {
-    mid = left + (right - left) / 2;
-    // printf("midpoint of %u and %u is: %u\n", left, right, mid);
-    comparison = strcmp(sortedDictionaryArrayOfStrings[mid], target);
-    if (comparison == 0) {
-      // Target substring exists in the dictionary, return 0
-      f_end = clock();
-      printFlush("Total time for search function: %lf\n", ((double)(f_end - f_start)) / CLOCKS_PER_SEC);
-      return 0;
-    } else if (comparison < 0) {
-      left = mid + 1; // If target is greater, ignore left half
-    } else {
-      right = mid - 1; // If target is smaller, ignore right half
-      if (mid == 0) {
-        right = 0;
-      }
-    }
-  }
-  // printf("%s not in dictionary file\n", target);
-
-  // If the target substring is not found in the dictionary, count its occurrences in the file string array
-  unsigned int count = 0;
-  clock_t start, end;
-  start = clock();
-
-  // for (unsigned int i = 0; i < fileSize; i++) {
-  //   if (!strcmp(arrayOfFileStrings[i], target)) {
-  //     count++;
-  //   }
-  // }
-  count = numberOfStringMatchesInArrayOfStrings(arrayOfFileStrings, fileSize, target);
-  end = clock();
-  printFlush("Time to search for %s: %lf -- count: %u\n", target, ((double)(end - start)) / CLOCKS_PER_SEC, count);
   f_end = clock();
-  printFlush("Total time for search function: %lf\n", ((double)(f_end - f_start)) / CLOCKS_PER_SEC);
-  return count;
+  printFlush("Time to fully process spelling error file with dictionary: %lf\n", ((double)(f_end - f_start)) / CLOCKS_PER_SEC);
+  return mistakesArr;
 }
 
 unsigned int numberOfStringMatchesInArrayOfStrings(const char **arrayOfStrings, unsigned int numStrings, const char *target) {
   // Assume sorted input, use binary search
-  unsigned int left = 0, right = numStrings - 1, mid;
+  int left = 0, right = numStrings - 1, mid;
   int comparison;
-  unsigned int count = 0; // Initialize count for matches
+  int count = 0; // Initialize count for matches
   while (left <= right) {
     mid = left + (right - left) / 2;
     comparison = strcmp(arrayOfStrings[mid], target);
@@ -762,15 +693,9 @@ unsigned int numberOfStringMatchesInArrayOfStrings(const char **arrayOfStrings, 
       // Increment count if target string matches current string
       count++;
       // Search for more matches to the left
-      unsigned int i = mid - 1;
-      if (mid == 0) {
-        break;
-      }
+      int i = mid - 1;
       while (i >= left && strcmp(arrayOfStrings[i], target) == 0) {
         count++;
-        if (i == 0) {
-          break;
-        }
         i--;
       }
       // Search for more matches to the right
@@ -785,9 +710,6 @@ unsigned int numberOfStringMatchesInArrayOfStrings(const char **arrayOfStrings, 
       left = mid + 1; // If target is greater, ignore left half
     } else {
       right = mid - 1; // If target is smaller, ignore right half
-      if (mid == 0) {
-        right = 0;
-      }
     }
   }
   // If target string is not found, return count of matches (which is 0)
@@ -845,33 +767,6 @@ void freeArrayOfSpellingErrors(spellingError **arrayOfMistakes, unsigned int cou
   *arrayOfMistakes = NULL; // Set the pointer to NULL to avoid dangling pointers
   return;
 }
-
-bool verifySortedStr(const char **sortedArrayOfStrings, const unsigned int numStrings) {
-  const char *min = sortedArrayOfStrings[0];
-  for (unsigned int i = 0; i < numStrings; i++) {
-    if (strcmp(sortedArrayOfStrings[i], min) < 0) {
-      printf("string %s is less than %s\n", sortedArrayOfStrings[i], min);
-      return false;
-    }
-  }
-  return true;
-}
-
-// bool verifySortedSpellingErrors(const spellingError *arrayOfSpellingErrors,
-//   const int numElements) {
-//   if (!arrayOfSpellingErrors || numElements < 1) {
-//     return true;
-//   }
-//   unsigned int min = arrayOfSpellingErrors[0].countErrors;
-//   for (unsigned int i = 0; i < numElements; i++) {
-//     if (arrayOfSpellingErrors[i].countErrors < min) {
-//       // printf("int %d is less than %d\n",
-//       //   arrayOfSpellingErrors[i].countErrors, min);
-//       return false;
-//     }
-//   }
-//   return true;
-// }
 
 int printToLog(const char *debugFile, const char *stringLiteral, ...) {
   if (!debugOutput) {
@@ -1021,6 +916,10 @@ char *getOutputString(threadArguments threadArgs) {
 }
 
 char *generateSummary(spellingError *errorArr, unsigned int numThreads, unsigned int arrayLength, char *inputString, unsigned int numSuccessfulThreads) {
+  if (!inputString) {
+    return NULL;
+  }
+  
   char formatString[250] = "";
   sprintf(formatString, "Number of files processed: %d\n", numSuccessfulThreads);
   unsigned int biggest = 0, secondBiggest = 0, thirdBiggest = 0, totalErrors = 0;
@@ -1060,14 +959,15 @@ char *generateSummary(spellingError *errorArr, unsigned int numThreads, unsigned
       break;
     case 3:
       newStr = "Three most common misspellings: ";
+    default:
+      // if there are no mistakes at all
+      newStr = "No mistakes!";
+      inputString = realloc(inputString, strlen(inputString)  + strlen(newStr) + 1);
+      strcat(inputString, newStr);
+      return inputString;
   }
   inputString = realloc(inputString, strlen(inputString)  + strlen(newStr) + 1);
   strcat(inputString, newStr);
-  if (!(biggest || secondBiggest || thirdBiggest)) {
-    inputString = realloc(inputString, strlen(inputString)  + strlen("No mistakes!") + 1);
-    strcat(inputString, "No mistakes!");
-    return inputString;
-  }
   for (char i = 0; i < numWordsToPrint; i++) {
     if (i == 0) {
       sprintf(formatString, "%s (%d times)", biggestStr, biggest);
@@ -1162,13 +1062,13 @@ void printToOutputFile(const char *fileName, const char *stringToPrint) {
   return;
 }
 
-unsigned int getNumDigitsInNumber(int number, unsigned char base) {
-  if (number == 0) {
+unsigned int getNumDigitsInPositiveNumber(unsigned int positiveNumber, unsigned char base) {
+  if (positiveNumber == 0) {
     return 1;
   }
   int digits = 0;
-  while (number) {
-    number /= base;
+  while (positiveNumber) {
+    positiveNumber /= base;
     digits++;
   }
   return digits;

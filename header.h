@@ -96,7 +96,7 @@ const char *getMistakeAtIndex(spellingError *arr, unsigned int threadNum, unsign
 char *generateSummary(spellingError *errorArr, unsigned int numThreads, unsigned int arrayLength, char *inputString, unsigned int numSuccessfulThreads);
 int writeThreadToFile(const char *fileName, spellingError *listOfMistakes, unsigned int numElements);
 void printToOutputFile(const char *fileName, const char* stringToPrint);
-unsigned int getNumDigitsInNumber(int number, unsigned char base);
+unsigned int getNumDigitsInPositiveNumber(unsigned int number, unsigned char base);
 void quicksortStrings(char **arrayofStrings, int left, int right);
 
 unsigned int numberOfStringMatchesInArrayOfStrings(const char **arrayOfStrings, unsigned int numStrings, const char *target);
