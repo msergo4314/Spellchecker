@@ -3,7 +3,7 @@
 #define MAX_WORD_LENGTH 40
 #define MAX_FILE_NAME_LENGTH 50
 #define MAX_SIZE_USERINPUT 100
-#define MAX_THREADS 16 // depends on machine so should be sure to check your machine
+// #define MAX_THREADS 16 // depends on machine so should be sure to check your machine
 #include <ctype.h> // tolower, isalpha, etc
 #include <pthread.h> // multithreading
 #include <stdatomic.h> // for atomic values

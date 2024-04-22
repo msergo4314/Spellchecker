@@ -1,7 +1,7 @@
 CC = gcc
 # CFLAGS = -fopenmp -Wall -g -std=c11 -lpthread
-CFLAGS = -Wall -std=c11 -lpthread -g
-# CFLAGS = -O3 -Wall-g -std=c11 -lpthread # agressively optimized by the compiler
+# CFLAGS = -Wall -std=c11 -lpthread -pedantic -g
+CFLAGS = -Wall -O1 -std=c11 -pedantic -lpthread -g # optimized by the compiler
 
 SRCS = spellchecker.c
 OBJS = $(SRCS:.c=.o)

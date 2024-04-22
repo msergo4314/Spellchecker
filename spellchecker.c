@@ -1,3 +1,7 @@
+/*
+NOTE: USES GCC and O1 optimizations
+*/
+
 #include "header.h"
 
 int main(int argc, char **argv) {
@@ -10,12 +14,12 @@ int main(int argc, char **argv) {
   if (argc > 1) {
     for(unsigned char i = 0; i < argc; i++) {
       convertEntireStringToLower(argv[i]);
-      if (!(strcmp(argv[i], "l") || !strcmp(argv[i], "-l"))) {
+      if (!strcmp(argv[i], "l") || !strcmp(argv[i], "-l")) {
         l_flag = true;
       }
       else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
-        printf("Usage: spellchecker.exe {l or -l} {--help or -h} {--default or -d}\n");
-        return ALTERNATE_SUCCESS;
+        printf("Usage: %s {l or -l} {--help or -h} {--default or -d}\n", argv[0]);
+        return SUCCESS;
       }
       else if (!strcmp(argv[i], "--default") || !strcmp(argv[i], "-d")) {
         // make sure to have dictionary.txt file in pwd of the exe (does not have to be actual pwd  )
@@ -53,24 +57,34 @@ int main(int argc, char **argv) {
   printf("Main Menu:\n");
   printf("1. Start a new spellchecking task\n2. Exit\n\n");
   printf("Select the mode of operation (1 or 2): ");
-  fgets(userInput, sizeof(userInput), stdin);
+  if (fgets(userInput, sizeof(userInput), stdin) == NULL) {
+    perror("fgets failed\n");
+    return FAILURE;
+  }
   unsigned char x;
   while ((x = validateUserInput(userInput)) != UINTEGER) {
     input_loop:
     // printf("Invalid. You entered a string of type %s. Try again: ",
     // returnTypeStrings[x]);
     printf("Invalid. Enter integer between 1 and 2: ");
-    fgets(userInput, sizeof(userInput), stdin);
+    if (fgets(userInput, sizeof(userInput), stdin) == NULL) {
+      perror("fgets failed\n");
+      return FAILURE;
+    }
   }
   unsigned char selection = (unsigned char) strtoul(userInput, NULL, 10);
   switch (selection) {
   case 1:
+    ;
     char *qString = "q";
     char fileNameStringCopy[MAX_FILE_NAME_LENGTH + 1];
     // get dictionary to process
     if (!defaultMode) { // if fielNameString is empty then ask for dictionary
       printf("Enter the filename of the dictionary (or 'Q' to quit): ");
-      fgets(fileNameString, sizeof(fileNameString), stdin);
+      if (fgets(fileNameString, sizeof(fileNameString), stdin) == NULL) {
+        perror("fgets failed\n");
+        return FAILURE;
+      }
       removeNewline(fileNameString);
       strcpy(fileNameStringCopy, fileNameString);
       convertEntireStringToLower(fileNameStringCopy);
@@ -92,7 +106,10 @@ int main(int argc, char **argv) {
     strcpy(args.dictionaryFileName, fileNameString);
     // get file to process
     printf("Enter the filename of the input file (or 'Q' to quit): ");
-    fgets(fileNameString, sizeof(fileNameString), stdin);
+    if (fgets(fileNameString, sizeof(fileNameString), stdin) == NULL) {
+      perror("fgets failed\n");
+      return FAILURE;
+    }
     removeNewline(fileNameString);
     strcpy(fileNameStringCopy, fileNameString);
     convertEntireStringToLower(fileNameStringCopy);
@@ -144,7 +161,7 @@ int main(int argc, char **argv) {
     pthread_mutex_unlock(&lock);
     goto main_menu;
   case 2:
-    printf("\nexiting program...\n");
+    printf("\nexiting...\n");
     char *outputString;
     pthread_mutex_lock(&lock);
     unsigned int numThreadsFinished = args.numThreadsFinished;
@@ -159,7 +176,13 @@ int main(int argc, char **argv) {
         pthread_mutex_lock(&lock);
         printf("waiting for thread #%d (ID = %lu) -- %d threads still running\n", i + 1, threadIDs[i], args.numThreadsInUse);
         pthread_mutex_unlock(&lock);
-        pthread_join(threadIDs[i], NULL);
+        // join returns non zero int when it fails
+        if (pthread_join(threadIDs[i], NULL)) {
+          fprintf(stderr, "could not join thread with ID %lu\n", threadIDs[i]);
+          freePointer((void **)&(args.dictionaryFileName));
+          freePointer((void **)&(args.spellcheckFileName));
+          return(FAILURE);
+        }
       }
       printf("All threads finished\n");
       outputString = getOutputString(args); // pass in thread struct
@@ -454,11 +477,16 @@ char **readFileArray(const char *fileName, unsigned int *wordCount) {
   unsigned int sizeBytes;
   char **stringArrToReturn = NULL;
   char *singleFileString;
+  // clock_t start, end;
+
   if (!(singleFileString = readEntireFileIntoStr(fileName, &sizeBytes))) {
     return NULL;
   }
   convertEntireStringToLower(singleFileString);
+  // start = clock();
   stringArrToReturn = splitStringOnWhiteSpace(singleFileString, wordCount);
+  // end = clock();
+  // printf("time to split string on whitespace is: %lf\n", (double)(end - start) / CLOCKS_PER_SEC);
   free(singleFileString);
   if (stringArrToReturn == NULL) {
     return NULL;
@@ -559,10 +587,10 @@ int partitionSpellingErrorArr(spellingError *arr, int start, int end) {
     }
   }
   // Swap pivot element with the element at i + 1
-  spellingError temp = arr[i + 1];
-  arr[i + 1] = arr[end];
+  spellingError temp = arr[++i];
+  arr[i] = arr[end];
   arr[end] = temp;
-  return i + 1;
+  return i;
 }
 
 void quickSortSpellingErrorArr(spellingError *arr, int start, int end) {
@@ -628,8 +656,7 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
       // this is when a match is NOT found in the dictionary...
       (*countTotalMistakes) += seenWords[i].occurances;
       unsigned int temp = *countInArr;
-      (*countInArr)++;
-      mistakesArr = (spellingError *) realloc(mistakesArr, ((temp + 1) * sizeof(spellingError)));
+      mistakesArr = (spellingError *) realloc(mistakesArr, ((++*countInArr) * sizeof(spellingError)));
       // printf("size of mistakes array is now %d\n", (int)*countInArr);
       mistakesArr[temp].countErrors = currentWord.occurances;
       mistakesArr[temp].misspelledString = (char *) strdup(currentWord.uniqueWord);
@@ -742,7 +769,7 @@ void freeArrayOfSpellingErrors(spellingError **arrayOfMistakes, unsigned int cou
   if (arrayOfMistakes == NULL || *arrayOfMistakes == NULL) {
     return;
   }
-  spellingError *array = *arrayOfMistakes; // safe as long as user does not pass in NULL
+  spellingError *array = *arrayOfMistakes; // safe to dereference
   for (int i = 0; i < countInArr; i++) {
     // Free the misspelledString for each spellingError struct
     if (array[i].misspelledString) {
@@ -812,7 +839,7 @@ void free2DArray(void ***addressOfGenericPointer, int numberOfInnerElements) {
   }
   void **genericPointer = (void **) *addressOfGenericPointer;
   for (int i = 0; i < numberOfInnerElements; i++) {
-    if ((*addressOfGenericPointer)[i]) {
+    if (genericPointer[i]) {
       free(genericPointer[i]);
       genericPointer[i] = NULL;
     }
