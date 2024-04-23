@@ -8,7 +8,7 @@ int main(int argc, char **argv) {
   bool l_flag = false, defaultMode = false;
   if (pthread_mutex_init(&lock, NULL) != 0) {
     printf("mutex init has failed\n");
-    return 1;
+    return FAILURE;
   }
   char fileNameString[MAX_FILE_NAME_LENGTH + 1] = "";
   if (argc > 1) {
@@ -27,8 +27,7 @@ int main(int argc, char **argv) {
       }
     }
   }
-  //   code to detect how many threads you have. REQUIRES -fopenmp compilation
-  //   flag
+  //   code to detect how many threads you have. REQUIRES -fopenmp compilation flag
   // running this code will add "leaks" but they are not true leaks
   //   int numThreads;
   //     #pragma omp parallel
@@ -49,10 +48,13 @@ int main(int argc, char **argv) {
   threadArguments args = {0}; // set all to 0, threads will update values
   start_time = clock();
   char cwd[1024 + MAX_FILE_NAME_LENGTH + 1];
-  if (getcwd(cwd, sizeof(cwd)) != NULL) {
-      // printf("Current working directory: %s\n", cwd);
-      // Use cwd to construct file paths relative to the current directory
+  if (getcwd(cwd, sizeof(cwd)) == NULL) {
+    perror("could not find CWD. Aborting.\n");
+    return FAILURE;
   }
+  // printf("Current working directory: %s\n", cwd);
+  // Use cwd to construct file paths relative to the current directory
+  char *qString = "q";
   main_menu:
   printf("Main Menu:\n");
   printf("1. Start a new spellchecking task\n2. Exit\n\n");
@@ -76,7 +78,6 @@ int main(int argc, char **argv) {
   switch (selection) {
   case 1:
     ;
-    char *qString = "q";
     char fileNameStringCopy[MAX_FILE_NAME_LENGTH + 1];
     // get dictionary to process
     if (!defaultMode) { // if fielNameString is empty then ask for dictionary
@@ -181,6 +182,7 @@ int main(int argc, char **argv) {
           fprintf(stderr, "could not join thread with ID %lu\n", threadIDs[i]);
           freePointer((void **)&(args.dictionaryFileName));
           freePointer((void **)&(args.spellcheckFileName));
+          pthread_mutex_destroy(&lock);
           return(FAILURE);
         }
       }
@@ -199,7 +201,7 @@ int main(int argc, char **argv) {
     pthread_mutex_destroy(&lock);
     end_time = clock(); // Record the end time
     cpu_time_used = ((double)(end_time - start_time)) / CLOCKS_PER_SEC;
-    printf("\n\nExecution time: %lf\n", cpu_time_used);
+    printf("\nExecution time: %lf\n", cpu_time_used);
     freePointer((void **)&(args.dictionaryFileName));
     freePointer((void **)&(args.spellcheckFileName));
     return SUCCESS; // end of main
