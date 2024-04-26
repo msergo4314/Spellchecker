@@ -323,12 +323,12 @@ void *threadFunction(void *vargp) {
   quickSortSpellingErrorArr(mistakes, 0, countInArr - 1); // sort high to low
   // do file IO with sorted results
 
-  // if (writeThreadToFile(threadOutputFile, mistakes, countInArr) == FAILURE) {
-  //   fprintf(stderr, "error with logging output of thread analysis to file %s!\n", threadOutputFile);
-  //   free(mistakes);
-  //   freeArrayOfSpellingErrors(&mistakes, data -> prevSize);
-  //   goto exit_failure;
-  // }
+  if (writeThreadToFile(threadOutputFile, mistakes, countInArr) == FAILURE) {
+    fprintf(stderr, "error with logging output of thread analysis to file %s!\n", threadOutputFile);
+    free(mistakes);
+    freeArrayOfSpellingErrors(&mistakes, data -> prevSize);
+    goto exit_failure;
+  }
   
   // exit success
   pthread_mutex_lock(&lock);
@@ -411,7 +411,7 @@ char *readEntireFileIntoStr(const char *fileName, unsigned int *sizeBytes) {
   int fd;
   // pthread_mutex_lock(&lock);
   if ((fd = open(fileName, O_RDONLY)) == -1) {
-    printf("bad file descriptor. File %s most likely does not exist\n", fileName);
+    fprintf(stdout, "bad file descriptor. File \"%s\" most likely does not exist\n", fileName);
     return NULL;
   }
   int size = lseek(fd, 0, SEEK_END); // sizeof file in bytes

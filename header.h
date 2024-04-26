@@ -73,9 +73,6 @@ typedef struct {
 } HashMap;
 
 void *threadFunction(void *vargp);
-unsigned int binarySearchArrayOfStrings(const char **sortedDictionaryArrayOfStrings, unsigned int dictionarySize,
-                                        const char **arrayOfFileStrings, unsigned int fileSize, const char *target);
-int openFileForReading(char *filename);
 unsigned char validateUserInput(char *inputString);
 void printFlush(const char *string, ...);
 void convertEntireStringToLower(char *string);
@@ -90,7 +87,6 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
 void freeArrayOfSpellingErrors(spellingError **arrayOfMistakes, unsigned int countInArr);
 unsigned int numStringMismatchesInArrayOfStrings(const char **arrayOfDictionaryStrings, const char **arrayOfFileStrings,
 unsigned int sizeDictionary, unsigned int sizeFile,  const char *target);
-bool verifySortedStr(const char ** sortedArrayOfStrings, const unsigned int numStrings);
 int partitionSpellingErrorArr(spellingError *arr, int start, int end);
 void quickSortSpellingErrorArr(spellingError *arr, int start, int end);
 int printToLog(const char *debugFile, const char *stringLiteral, ...);

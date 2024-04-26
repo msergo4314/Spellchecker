@@ -1,11 +1,12 @@
 import os, sys, random
 
+NUM_WORDS : int = int(5e5) # 200_000 is the length of a long novel
+
 # change dictionary path as needed
 DICTIONARY_FILE : str = "/mnt/c/global c/dictionary.txt"
 TEST_FILE_NAME : str = 'test.txt'
-NUM_ENTRIES : int = int(1e7) #150 000 is typical novel length
 
-mistakes_1 = ('darfadf', 'raaaahd', 'blarg', 'bloog', 'foo', 'bar', 'xxxya')
+mistakes_1 = ('darfadf', 'raaaahd', 'blarg', 'bloog', 'xxxya')
 mistakes_2 = ('farggg', 'sisgamg', 'adfqh', 'acafg', 'tttssqqd', 'oooooaaaaap', 'blurgz')
 
 def make_test_file(name : str = TEST_FILE_NAME, dictionary_words : list[str] = None):
@@ -13,11 +14,11 @@ def make_test_file(name : str = TEST_FILE_NAME, dictionary_words : list[str] = N
         print("no dictionary list given")
         return
     words : list[str] = []
-    for i in range(NUM_ENTRIES):
+    for i in range(NUM_WORDS):
         num : float = random.random()
-        if num < 0.03: # 3%
+        if num < 0.001: # 0.1%
             words.append(random.choice(mistakes_1))
-        elif num < 0.05: # 5%
+        elif num < 0.003: # 0.03%
             words.append(random.choice(mistakes_2))
         else:
             # a valid word is used in this case
