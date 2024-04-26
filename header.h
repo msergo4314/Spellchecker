@@ -38,11 +38,6 @@ typedef struct mistake {
   unsigned int threadID;
 } spellingError;
 
-typedef struct uniqueFileWord {
-  char *uniqueWord;
-  unsigned int occurances;
-} uniqueFileWord;
-
 // functionally this struct is both input and output for thread functions
 typedef struct threadArgs {
   char *dictionaryFileName;
@@ -61,6 +56,21 @@ enum ReturnTypes {FAILURE = EXIT_FAILURE, SUCCESS = EXIT_SUCCESS, ALTERNATE_SUCC
 // _Atomic unsigned int numThreadsStarted; // atomic varaibles are also an option if you don't want to use mutexes (but can't be used for everything anyway)
 // _Atomic unsigned int numThreadsFinished;
 // _Atomic unsigned int numThreadsInUse;
+
+typedef struct {
+  char *key;
+  unsigned int occurrences;
+} StringEntry;
+
+typedef struct HashNode {
+  StringEntry entry;
+  struct HashNode *next;
+} HashNode;
+
+typedef struct {
+  HashNode **buckets;
+  size_t size;
+} HashMap;
 
 void *threadFunction(void *vargp);
 unsigned int binarySearchArrayOfStrings(const char **sortedDictionaryArrayOfStrings, unsigned int dictionarySize,
@@ -81,13 +91,11 @@ void freeArrayOfSpellingErrors(spellingError **arrayOfMistakes, unsigned int cou
 unsigned int numStringMismatchesInArrayOfStrings(const char **arrayOfDictionaryStrings, const char **arrayOfFileStrings,
 unsigned int sizeDictionary, unsigned int sizeFile,  const char *target);
 bool verifySortedStr(const char ** sortedArrayOfStrings, const unsigned int numStrings);
-// bool verifySortedSpellingErrors(const spellingError *arrayOfSpellingErrors, const int numElements);
 int partitionSpellingErrorArr(spellingError *arr, int start, int end);
 void quickSortSpellingErrorArr(spellingError *arr, int start, int end);
 int printToLog(const char *debugFile, const char *stringLiteral, ...);
 void getNonAlphabeticalCharsString(char *buffer);
 int max(int a, int b);
-// unsigned int numStringMismatchesInStrings(const char *dictionaryString, const char *target);
 char* getOutputString (threadArguments threadArgsPtr);
 unsigned int countMistakesForThread(spellingError *errorArr, unsigned int numEntriesInArr, int index);
 const char *getFileNameFromThreadID(spellingError *arr, int index, unsigned int numElements);

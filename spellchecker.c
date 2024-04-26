@@ -605,14 +605,118 @@ void quickSortSpellingErrorArr(spellingError *arr, int start, int end) {
   return;
 }
 
+unsigned int hash(const char *key, size_t tableSize) {
+  unsigned int hashVal = 0;
+  while (*key != '\0') {
+    hashVal = (hashVal << 5) + *key++; // increment happens BEFORE dereference
+  }
+  return hashVal % tableSize;
+}
+
+HashMap *createHashMap(size_t size) {
+  HashMap *map = malloc(sizeof(HashMap));
+  if (map == NULL) {
+    perror("Could not malloc space for hashmap!\n");
+    return NULL;
+  }
+  map->buckets = calloc(size, sizeof(HashNode *));
+  if (map->buckets == NULL) {
+    free(map);
+    perror("Could not create buckets for hashmap!\n");
+    return NULL;
+  }
+  map->size = size;
+  return map;
+}
+
+void destroyStringEntry(StringEntry *entry) {
+  // assumes entry is a valid address
+  free(entry->key);
+}
+
+void destroyHashNode(HashNode *node) {
+  // assumes node is a valid address
+  destroyStringEntry(&(node->entry));
+  free(node);
+}
+
+void destroyHashMap(HashMap *map) {
+  if (map == NULL) {
+    return;
+  }
+  for (size_t i = 0; i < map->size; i++) {
+    HashNode *current = map->buckets[i];
+    while (current != NULL) {
+      HashNode *temp = current;
+      current = current->next;
+      destroyHashNode(temp);
+    }
+  }
+  free(map->buckets);
+  free(map);
+}
+
+HashNode *lookupInHashMap(HashMap *map, const char *key) {
+  // returns NULL if the key is NOT in the hashmap else pointer to node
+  if (map == NULL || key == NULL) {
+    perror("map or key are NULL\n");
+    return NULL;
+  }
+  unsigned int index = hash(key, map->size);
+  HashNode *current = map->buckets[index];
+  while (current != NULL) {
+    if (strcmp(current->entry.key, key) == 0) {
+      return current;
+    }
+    current = current->next;
+  }
+  return NULL;
+}
+
+bool addToHashMap(HashMap *map, const char *key, unsigned int occurrences) {
+  if (map == NULL || key == NULL) {
+    perror("map or key are NULL\n");
+    return false;
+  }
+  unsigned int index = hash(key, map->size);
+  HashNode *current = map->buckets[index];
+  // Check if the key already exists in the map
+  while (current != NULL) {
+    if (strcmp(current->entry.key, key) == 0) {
+      // Update the occurrences count
+      current->entry.occurrences += occurrences;
+      return true;
+    }
+    current = current->next;
+  }
+  // Key not found, add a new entry
+  HashNode *newNode = malloc(sizeof(HashNode));
+  if (newNode == NULL) {
+    perror("could not malloc a new HashNode!\n");
+    return false;
+  }
+  newNode->entry.key = strdup(key);
+  if (newNode->entry.key == NULL) {
+    perror("strdup failed for key!\n");
+    free(newNode);
+    return false;
+  }
+  newNode->entry.occurrences = occurrences;
+  newNode->next = map->buckets[index];
+  map->buckets[index] = newNode;
+  return true;
+}
+
 spellingError *compareFileData(char **dictionaryData, char **fileData, const unsigned int numEntriesDictionary,
 const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned int *countInArr) {
+
   *countTotalMistakes = 0;
   *countInArr = 0;
   spellingError *mistakesArr = NULL; // no entries yet
-  
-  // clock_t start, end, f_start, f_end;
+
+  // clock_t f_start, f_end;
   // f_start = clock();
+  // clock_t start, end;
   // start = clock();
   quicksortStrings(dictionaryData, 0, numEntriesDictionary - 1);
   // end = clock();
@@ -621,82 +725,115 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
   quicksortStrings(fileData, 0, numEntriesFile - 1);
   // end = clock();
   // printFlush("Time to sort spellcheck file: %lf\n", ((double)(end - start)) / CLOCKS_PER_SEC);
-  bool flag = false;
-  uniqueFileWord *seenWords = (uniqueFileWord *)calloc(numEntriesFile, sizeof(uniqueFileWord));
-  if (!seenWords) {
-    fprintf(stderr, "failed calloc inside compareFileData\n");
-    free2DArray((void ***)(&dictionaryData), numEntriesDictionary);
-    free2DArray((void ***)(&fileData), numEntriesFile);
+
+  // Create hash map for seen words
+  HashMap *seenWordsMap = createHashMap(numEntriesFile);
+  if (seenWordsMap == NULL) {
+    perror("Failed to create hash map for seen words");
     return NULL;
   }
-  // printf("REACHED. %d entries in file.\n", numEntriesFile);
-  unsigned int lenSeenWords = 0;
-  for (int i = 0; i < numEntriesFile; i++) { // for each word in the file...
-    flag = false;
-    for (int j = 0; j < i; j++) {
-      if (seenWords[j].uniqueWord && strcmp(fileData[i], seenWords[j].uniqueWord) == 0) {
-        flag = true; // Word already seen
-        break;
+
+  // Populate hash map with unique words and their occurrences
+  for (unsigned int i = 0; i < numEntriesFile; i++) {
+    HashNode *node = lookupInHashMap(seenWordsMap, fileData[i]);
+    if (node == NULL) {
+      // Word not seen before, add it to the map
+      if (!addToHashMap(seenWordsMap, fileData[i], 1)) {
+        fprintf(stderr, "Failed to add word %s to hash map", fileData[i]);
+        destroyHashMap(seenWordsMap);
+        return NULL;
       }
-    }
-    if (flag) {
-      continue;
-    }
-    seenWords[lenSeenWords].uniqueWord = strdup(fileData[i]);
-    seenWords[lenSeenWords].occurances = numberOfStringMatchesInArrayOfStrings((const char **)fileData, numEntriesFile, fileData[i]);
-    if (!(seenWords[lenSeenWords++].uniqueWord)) {
-      perror("strdup failed for seenwords inside comparison function\n");
-      free2DArray((void ***)(&dictionaryData), numEntriesDictionary);
-      free2DArray((void ***)(&fileData), numEntriesFile);
-      return NULL;
+    } else {
+      // Increment occurrences count for existing word
+      node->entry.occurrences++;
     }
   }
-  for (unsigned int i = 0; i < lenSeenWords; i++) {
-    uniqueFileWord currentWord = seenWords[i];
-    if ((numberOfStringMatchesInArrayOfStrings((const char **) dictionaryData, numEntriesDictionary, currentWord.uniqueWord)) == 0) {
-      // if ((countMistakesForCurrentWord = numStringMismatchesInArrayOfStrings(dictionaryData, fileData, numEntriesDictionary, numEntriesFile, (const char *)fileData[i])) > 0) {
-      // this is when a match is NOT found in the dictionary...
-      (*countTotalMistakes) += seenWords[i].occurances;
-      unsigned int temp = *countInArr;
-      mistakesArr = (spellingError *) realloc(mistakesArr, ((++*countInArr) * sizeof(spellingError)));
-      // printf("size of mistakes array is now %d\n", (int)*countInArr);
-      mistakesArr[temp].countErrors = currentWord.occurances;
-      mistakesArr[temp].misspelledString = (char *) strdup(currentWord.uniqueWord);
-      if (!mistakesArr[temp].misspelledString) {
-        fprintf(stderr, "strdup failed for mistakesArr misspelledString at index %d\n", temp);
-        free2DArray((void ***)(&dictionaryData), numEntriesDictionary);
-        free2DArray((void ***)(&fileData), numEntriesFile);
-        for (unsigned int i = 0; i < lenSeenWords; i++) {
-          free(seenWords[i].uniqueWord);
+  // printf("There are %u entries in the hashmap\n", numEntriesFile);
+  size_t uniqueEntries = 0;
+  for (size_t i = 0; i < numEntriesFile; i++) {
+    HashNode *current = seenWordsMap->buckets[i];
+    while (current != NULL) {
+      uniqueEntries++;
+      current = current->next;
+    }
+  }
+  // printf("There are %lu unique entries in the hashmap\n", uniqueEntries);
+  StringEntry * list = malloc(sizeof(StringEntry) * uniqueEntries);
+  if (list == NULL) {
+    perror("bad list malloc");
+    destroyHashMap(seenWordsMap);
+    return NULL;
+  }
+  for (size_t i = 0, list_i = 0; i < numEntriesFile && list_i < uniqueEntries; i++) {
+    HashNode *current = seenWordsMap->buckets[i];
+    while (current != NULL) {
+      list[list_i].key = strdup(current->entry.key);
+      if (list[list_i].key == NULL) {
+        perror("failed strudp for unique hash map list");
+        while(list_i >= 1) {
+          free(list[--list_i].key);
         }
-        free(seenWords);
+        free(list);
+        destroyHashMap(seenWordsMap);
+        return NULL;
+      }
+      list[list_i++].occurrences = current->entry.occurrences;
+      current = current->next;
+    }
+  }
+  // Check each unique word against the dictionary
+  unsigned int temp;
+  for (unsigned int i = 0; i < uniqueEntries; i++) {
+    if ((numberOfStringMatchesInArrayOfStrings((const char **) dictionaryData, numEntriesDictionary, list[i].key) == 0)) {
+      // Word not found in dictionary, add to mistakes array
+      // printf("string %s not in dictionary\n", list[i].key);
+      temp = *countInArr;
+      mistakesArr = realloc(mistakesArr, (++(*countInArr)) * sizeof(spellingError));
+      if (mistakesArr == NULL) {
+        perror("Failed to reallocate memory for mistakes array");
+        for (size_t i = 0; i < uniqueEntries; i++) {
+          free(list[i].key);
+        }
+        free(list);
+        destroyHashMap(seenWordsMap);
+        return NULL;
+      }
+      // Populate mistake entry
+      mistakesArr[temp].countErrors = list[i].occurrences;
+      mistakesArr[temp].misspelledString = strdup(list[i].key);
+      if (mistakesArr[temp].misspelledString == NULL) {
+        perror("Failed to duplicate misspelled string");
+        for (size_t i = 0; i < uniqueEntries; i++) {
+          free(list[i].key);
+        }
+        free(list);
+        destroyHashMap(seenWordsMap);
         return NULL;
       }
       mistakesArr[temp].dictionaryName = NULL;
       mistakesArr[temp].fileName = NULL;
-      if (mistakesArr[temp].misspelledString == NULL) {
-        printf("error with malloc for strdup\n");
-        free2DArray((void ***)(&dictionaryData), numEntriesDictionary);
-        free2DArray((void ***)(&fileData), numEntriesFile);
-        for (unsigned int i = 0; i < lenSeenWords; i++) {
-          free(seenWords[i].uniqueWord);
-        }
-        free(seenWords);
-        return NULL;
-      }
+      // Update total mistakes count
+      (*countTotalMistakes) += list[i].occurrences;
     }
-    free(seenWords[i].uniqueWord);
   }
-  free(seenWords);
-  if (!mistakesArr) { // if there are no mistakes create the array and populate it with one (empty) entry
-    mistakesArr = (spellingError *) calloc(1, sizeof(spellingError));
-    if (!mistakesArr) {
-      free2DArray((void ***)(&dictionaryData), numEntriesDictionary);
-      free2DArray((void ***)(&fileData), numEntriesFile);
-      perror("could not calloc mistake array inside compareFileData\n");
+  // Clean up
+  for (size_t i = 0; i < uniqueEntries; i++) {
+    free(list[i].key);
+  }
+  free(list);
+  destroyHashMap(seenWordsMap);
+  if (mistakesArr == NULL) {
+    printf("No mistakes\n");
+    mistakesArr = malloc(sizeof(spellingError));
+    if (mistakesArr == NULL) {
+      perror("could not malloc mistakes array!\n");
       return NULL;
     }
-    (*countInArr) = 1;
+    mistakesArr[0].countErrors = 0;
+    mistakesArr[0].dictionaryName = NULL;
+    mistakesArr[0].fileName = NULL;
+    mistakesArr[0].misspelledString = NULL;
+    *countInArr = 1;
   }
   // f_end = clock();
   // printFlush("Time to fully process spelling error file with dictionary: %lf\n", ((double)(f_end - f_start)) / CLOCKS_PER_SEC);

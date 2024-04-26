@@ -3,7 +3,7 @@ import os, sys, random
 # change dictionary path as needed
 DICTIONARY_FILE : str = "/mnt/c/global c/dictionary.txt"
 TEST_FILE_NAME : str = 'test.txt'
-NUM_ENTRIES : int = int(150_000) #150 000 is typical novel length
+NUM_ENTRIES : int = int(1e7) #150 000 is typical novel length
 
 mistakes_1 = ('darfadf', 'raaaahd', 'blarg', 'bloog', 'foo', 'bar', 'xxxya')
 mistakes_2 = ('farggg', 'sisgamg', 'adfqh', 'acafg', 'tttssqqd', 'oooooaaaaap', 'blurgz')
