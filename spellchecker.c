@@ -22,7 +22,7 @@ int main(int argc, char **argv) {
         return SUCCESS;
       }
       else if (!strcmp(argv[i], "--default") || !strcmp(argv[i], "-d")) {
-        // make sure to have dictionary.txt file in pwd of the exe (does not have to be actual pwd  )
+        // make sure to have dictionary.txt file in pwd of the exe (does not have to be actual pwd)
         defaultMode = true;
       }
     }
@@ -77,7 +77,7 @@ int main(int argc, char **argv) {
   unsigned char selection = (unsigned char) strtoul(userInput, NULL, 10);
   switch (selection) {
   case 1:
-    ;
+    ; // empty statement or else gcc will complain (pedantic flag)
     char fileNameStringCopy[MAX_FILE_NAME_LENGTH + 1];
     // get dictionary to process
     if (!defaultMode) { // if fielNameString is empty then ask for dictionary
@@ -291,9 +291,9 @@ void *threadFunction(void *vargp) {
   }
 
   unsigned int countTotalMistakes, countInArr;
-  spellingError *mistakes = compareFileData((const char **) dictionaryArrayOfStrings,
-    (const char **) fileArrayOfStrings, wordCountDictionary,
-    wordCountFile, &countTotalMistakes, &countInArr);
+  spellingError *mistakes = compareFileData(dictionaryArrayOfStrings, fileArrayOfStrings,
+  wordCountDictionary, wordCountFile, &countTotalMistakes, &countInArr);
+
   free2DArray((void ***)&fileArrayOfStrings, wordCountFile);
   free2DArray((void ***)&dictionaryArrayOfStrings, wordCountDictionary);
   // should ALWAYS return valid pointer
@@ -455,7 +455,7 @@ unsigned char validateUserInput(char *inputString) {
       chars++;
     }
   }
-  if (hasDecimal && (digit >= 2)&& !chars) {
+  if (hasDecimal && (digit >= 2) && !chars) {
     return FLOAT;
   }
   if (digit && !chars && !hasDecimal) {
@@ -555,7 +555,7 @@ char **splitStringOnWhiteSpace(const char *inputString, unsigned int *wordCount)
     *wordCount = wordCountLocal;
     return NULL;
   }
-  char delimiters[CHAR_MAX - CHAR_MIN + 1] = "";
+  char delimiters[CHAR_MAX - CHAR_MIN + 1] = "\n";
   getNonAlphabeticalCharsString(delimiters);
   // printf("delims: %s\n", delimiters);
   char *token = strtok((char *) inputString, delimiters); // cast to char *
@@ -605,7 +605,7 @@ void quickSortSpellingErrorArr(spellingError *arr, int start, int end) {
   return;
 }
 
-spellingError *compareFileData(const char **dictionaryData, const char **fileData, const unsigned int numEntriesDictionary,
+spellingError *compareFileData(char **dictionaryData, char **fileData, const unsigned int numEntriesDictionary,
 const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned int *countInArr) {
   *countTotalMistakes = 0;
   *countInArr = 0;
@@ -614,11 +614,11 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
   // clock_t start, end, f_start, f_end;
   // f_start = clock();
   // start = clock();
-  quicksortStrings((char **) dictionaryData, 0, numEntriesDictionary - 1);
+  quicksortStrings(dictionaryData, 0, numEntriesDictionary - 1);
   // end = clock();
   // printFlush("Time to sort dictionary: %lf\n", ((double)(end - start)) / CLOCKS_PER_SEC);
   // start = clock();
-  quicksortStrings((char **) fileData, 0, numEntriesFile - 1);
+  quicksortStrings(fileData, 0, numEntriesFile - 1);
   // end = clock();
   // printFlush("Time to sort spellcheck file: %lf\n", ((double)(end - start)) / CLOCKS_PER_SEC);
   bool flag = false;
@@ -643,7 +643,7 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
       continue;
     }
     seenWords[lenSeenWords].uniqueWord = strdup(fileData[i]);
-    seenWords[lenSeenWords].occurances = numberOfStringMatchesInArrayOfStrings(fileData, numEntriesFile, fileData[i]);
+    seenWords[lenSeenWords].occurances = numberOfStringMatchesInArrayOfStrings((const char **)fileData, numEntriesFile, fileData[i]);
     if (!(seenWords[lenSeenWords++].uniqueWord)) {
       perror("strdup failed for seenwords inside comparison function\n");
       free2DArray((void ***)(&dictionaryData), numEntriesDictionary);
@@ -653,7 +653,7 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
   }
   for (unsigned int i = 0; i < lenSeenWords; i++) {
     uniqueFileWord currentWord = seenWords[i];
-    if ((numberOfStringMatchesInArrayOfStrings(dictionaryData, numEntriesDictionary, currentWord.uniqueWord)) == 0) {
+    if ((numberOfStringMatchesInArrayOfStrings((const char **) dictionaryData, numEntriesDictionary, currentWord.uniqueWord)) == 0) {
       // if ((countMistakesForCurrentWord = numStringMismatchesInArrayOfStrings(dictionaryData, fileData, numEntriesDictionary, numEntriesFile, (const char *)fileData[i])) > 0) {
       // this is when a match is NOT found in the dictionary...
       (*countTotalMistakes) += seenWords[i].occurances;
@@ -688,18 +688,14 @@ const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned in
     free(seenWords[i].uniqueWord);
   }
   free(seenWords);
-  if (!mistakesArr) { // if there are no mistakes create the array and populate it with one entry
-    mistakesArr = (spellingError *) malloc(sizeof(spellingError));
+  if (!mistakesArr) { // if there are no mistakes create the array and populate it with one (empty) entry
+    mistakesArr = (spellingError *) calloc(1, sizeof(spellingError));
     if (!mistakesArr) {
       free2DArray((void ***)(&dictionaryData), numEntriesDictionary);
       free2DArray((void ***)(&fileData), numEntriesFile);
-      perror("could not malloc mistake array inside compareFileData\n");
+      perror("could not calloc mistake array inside compareFileData\n");
       return NULL;
     }
-    mistakesArr[0].countErrors = 0;
-    mistakesArr[0].misspelledString = NULL;
-    mistakesArr[0].dictionaryName = NULL;
-    mistakesArr[0].fileName = NULL;
     (*countInArr) = 1;
   }
   // f_end = clock();

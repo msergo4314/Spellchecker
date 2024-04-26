@@ -5,5 +5,5 @@ A2
 *.txt
 *.out
 .vscode
+spellchecker
 *.exe
-*.py

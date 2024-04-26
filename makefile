@@ -5,9 +5,9 @@ CFLAGS = -Wall -O1 -std=c11 -pedantic -lpthread -g # optimized by the compiler
 
 SRCS = spellchecker.c
 OBJS = $(SRCS:.c=.o)
-EXECUTABLE = spellchecker.exe
+EXECUTABLE = spellchecker
 
-all: $(EXECUTABLE)
+all: $(EXECUTABLE) makefile header.h
 
 $(EXECUTABLE): $(OBJS) header.h
 	$(CC) $(CFLAGS) $(OBJS) -o $@
