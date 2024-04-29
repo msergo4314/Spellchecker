@@ -1,7 +1,6 @@
-CC = gcc
+CC = gcc #clang also may work
 # CFLAGS = -fopenmp -Wall -g -std=c11 -lpthread
-# CFLAGS = -Wall -std=c11 -lpthread -pedantic -g
-CFLAGS = -Wall -O0 -std=c11 -pedantic -lpthread -g # optimized by the compiler
+CFLAGS = -Wall -std=c11 -pedantic -lpthread -g # g flag is very good for valgrind
 
 SRCS = spellchecker.c
 OBJS = $(SRCS:.c=.o)

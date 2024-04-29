@@ -1,6 +1,6 @@
 import os, sys, random
 
-NUM_WORDS : int = int(5e5) # 200_000 is the length of a long novel
+NUM_WORDS : int = int(5e6) # 200_000 is the length of a long novel
 
 # change dictionary path as needed
 DICTIONARY_FILE : str = "/mnt/c/global c/dictionary.txt"
@@ -18,7 +18,7 @@ def make_test_file(name : str = TEST_FILE_NAME, dictionary_words : list[str] = N
         num : float = random.random()
         if num < 0.001: # 0.1%
             words.append(random.choice(mistakes_1))
-        elif num < 0.003: # 0.03%
+        elif num < 0.003: # 0.3%
             words.append(random.choice(mistakes_2))
         else:
             # a valid word is used in this case
@@ -30,7 +30,9 @@ def make_test_file(name : str = TEST_FILE_NAME, dictionary_words : list[str] = N
                 file.write(f'{word}\n')
             else:
                 file.write(f'{word} ')
-                
+            if (i + 1) % int(1e6) == 0:
+                pass
+                print(f"writing word #{i + 1:.1e}")
 def main() -> int:
     if not os.path.exists(DICTIONARY_FILE):
         print(f"dictionary at location {DICTIONARY_FILE} not found. Exiting")

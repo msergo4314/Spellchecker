@@ -1,7 +1,6 @@
 *.pdf
 debug.txt
 *.o
-A2
 *.txt
 *.out
 .vscode
