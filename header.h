@@ -1,6 +1,6 @@
 // #ifndef "header.h"
 #define _POSIX_C_SOURCE 200809L
-#define MAX_WORD_LENGTH 40
+#define MAX_WORD_LENGTH 40 // experimentally it's actually 32
 #define MAX_FILE_NAME_LENGTH 50
 #define MAX_SIZE_USERINPUT 100
 #include <ctype.h> // tolower, isalpha, etc
@@ -30,36 +30,38 @@ const bool debugOutput = false; // flag for extra prints to file
 const bool detailedDebug = false;
 const char* dictionaryAbsPath = "/mnt/c/global C/dictionary.txt";
 
+typedef unsigned int uint; // slightly easier to type
+
 typedef struct mistake {
-  unsigned int countErrors;
+  uint countErrors;
   char *misspelledString;
   char *dictionaryName;
   char *fileName;
-  unsigned int threadID;
+  uint threadID;
 } spellingError;
 
 // functionally this struct is both input and output for thread functions
 typedef struct threadArgs {
   char *dictionaryFileName;
   char *spellcheckFileName;
-  unsigned int threadSucccessCount; // this will be set directly by the threads to track success/failure
+  uint threadSucccessCount; // this will be set directly by the threads to track success/failure
   spellingError *errorArray; // array of mistakes appended by each thread
-  unsigned int prevSize; // previous size of mistakes array (needed to realloc)
-  unsigned int numThreadsStarted;
-  unsigned int numThreadsFinished;
-  unsigned int numThreadsInUse;
+  uint prevSize; // previous size of mistakes array (needed to realloc)
+  uint numThreadsStarted;
+  uint numThreadsFinished;
+  uint numThreadsInUse;
 } threadArguments;
 
 enum StringTypes {ALPHA_ONLY, UINTEGER, FLOAT, MIXED};
 enum ReturnTypes {FAILURE = EXIT_FAILURE, SUCCESS = EXIT_SUCCESS, ALTERNATE_SUCCESS = -1};
 
-// _Atomic unsigned int numThreadsStarted; // atomic varaibles are also an option if you don't want to use mutexes (but can't be used for everything anyway)
-// _Atomic unsigned int numThreadsFinished;
-// _Atomic unsigned int numThreadsInUse;
+// _Atomic uint numThreadsStarted; // atomic varaibles are also an option if you don't want to use mutexes (but can't be used for everything anyway)
+// _Atomic uint numThreadsFinished;
+// _Atomic uint numThreadsInUse;
 
 typedef struct {
   char *key;
-  unsigned int occurrences;
+  uint occurrences;
 } StringEntry;
 
 typedef struct HashNode {
@@ -77,28 +79,28 @@ unsigned char validateUserInput(char *inputString);
 void printFlush(const char *string, ...);
 void convertEntireStringToLower(char *string);
 void removeNewline(char *string);
-char *readEntireFileIntoStr(const char *fileName, unsigned int *sizeBytes);
-char** splitStringOnWhiteSpace(const char* inputString,unsigned int* wordCount);
-char **readFileArray(const char *fileName, unsigned int *wordCount);
+char *readEntireFileIntoStr(const char *fileName, uint *sizeBytes);
+char** splitStringOnWhiteSpace(const char* inputString,uint* wordCount);
+char **readFileArray(const char *fileName, uint *wordCount);
 void free2DArray(void ***addressOfGenericPointer, int numberOfInnerElements);
 void freePointer(void **addressOfGenericPointer);
-spellingError *compareFileData(char **dictionaryData, char **fileData, const unsigned int numEntriesDictionary,
-const unsigned int numEntriesFile, unsigned int *countTotalMistakes, unsigned int *countInArr);
-void freeArrayOfSpellingErrors(spellingError **arrayOfMistakes, unsigned int countInArr);
-unsigned int numStringMismatchesInArrayOfStrings(const char **arrayOfDictionaryStrings, const char **arrayOfFileStrings,
-unsigned int sizeDictionary, unsigned int sizeFile,  const char *target);
+spellingError *compareFileData(char **dictionaryData, char **fileData, const uint numEntriesDictionary,
+const uint numEntriesFile, uint *countTotalMistakes, uint *countInArr);
+void freeArrayOfSpellingErrors(spellingError **arrayOfMistakes, uint countInArr);
+uint numStringMismatchesInArrayOfStrings(const char **arrayOfDictionaryStrings, const char **arrayOfFileStrings,
+uint sizeDictionary, uint sizeFile,  const char *target);
 int partitionSpellingErrorArr(spellingError *arr, int start, int end);
 void quickSortSpellingErrorArr(spellingError *arr, int start, int end);
 int printToLog(const char *debugFile, const char *stringLiteral, ...);
 void getNonAlphabeticalCharsString(char *buffer);
 int max(int a, int b);
 char* getOutputString (threadArguments threadArgsPtr);
-unsigned int countMistakesForThread(spellingError *errorArr, unsigned int numEntriesInArr, int index);
-const char *getFileNameFromThreadID(spellingError *arr, int index, unsigned int numElements);
-const char *getMistakeAtIndex(spellingError *arr, unsigned int threadNum, unsigned int index, unsigned int numElements);
-char *generateSummary(spellingError *errorArr, unsigned int numThreads, unsigned int arrayLength, char *inputString, unsigned int numSuccessfulThreads);
-int writeThreadToFile(const char *fileName, spellingError *listOfMistakes, unsigned int numElements);
+uint countMistakesForThread(spellingError *errorArr, uint numEntriesInArr, int index);
+const char *getFileNameFromThreadID(spellingError *arr, int index, uint numElements);
+const char *getMistakeAtIndex(spellingError *arr, uint threadNum, uint index, uint numElements);
+char *generateSummary(spellingError *errorArr, uint numThreads, uint arrayLength, char *inputString, uint numSuccessfulThreads);
+int writeThreadToFile(const char *fileName, spellingError *listOfMistakes, uint numElements);
 void printToOutputFile(const char *fileName, const char* stringToPrint);
-unsigned int getNumDigitsInPositiveNumber(unsigned int number, unsigned char base);
+uint getNumDigitsInPositiveNumber(uint number, unsigned char base);
 void quicksortStrings(char **arrayofStrings, int left, int right);
-unsigned int numberOfStringMatchesInArrayOfStrings(const char **arrayOfStrings, unsigned int numStrings, const char *target);
+uint numberOfStringMatchesInArrayOfStrings(const char **arrayOfStrings, uint numStrings, const char *target);
