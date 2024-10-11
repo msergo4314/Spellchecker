@@ -1,5 +1,5 @@
 /*
-NOTE: USES GCC
+NOTE: USES GCC and pthread
 */
 
 #include "header.h"
@@ -27,17 +27,6 @@ int main(int argc, char **argv) {
       }
     }
   }
-  //   code to detect how many threads you have. REQUIRES -fopenmp compilation flag
-  // running this code will add "leaks" but they are not true leaks
-  //   int numThreads;
-  //     #pragma omp parallel
-  //     {
-  //         #pragma omp single
-  //         {
-  //             numThreads = omp_get_num_threads();
-  //         }
-  //     }
-  //   printf("Number of threads for this computer: %d\n", numThreads);
   char userInput[MAX_SIZE_USERINPUT + 1] = "";
   pthread_t *threadIDs = NULL;
   uint numThreadsStarted = 0;
@@ -54,7 +43,7 @@ int main(int argc, char **argv) {
   }
   // printf("Current working directory: %s\n", cwd);
   // Use cwd to construct file paths relative to the current directory
-  char *qString = "q";
+  char *qString = "q"; // used when the user wants to exit
   main_menu:
   printf("Main Menu:\n");
   printf("1. Start a new spellchecking task\n2. Exit\n\n");
@@ -80,7 +69,7 @@ int main(int argc, char **argv) {
     ; // empty statement or else gcc will complain (pedantic flag)
     char fileNameStringCopy[MAX_FILE_NAME_LENGTH + 1];
     // get dictionary to process
-    if (!defaultMode) { // if fielNameString is empty then ask for dictionary
+    if (!defaultMode) { // if not in the default mode then ask for dictionary
       printf("Enter the filename of the dictionary (or 'Q' to quit): ");
       if (fgets(fileNameString, sizeof(fileNameString), stdin) == NULL) {
         perror("fgets failed\n");
@@ -247,7 +236,7 @@ void *threadFunction(void *vargp) {
   // printf("file to check (dictionary): %s\n", dictionaryFileName);
   dictionaryArrayOfStrings = readFileArray(dictionaryFileName, &wordCountDictionary);
   if (!dictionaryArrayOfStrings) { 
-    // fprintf(stderr, "Reading words array from dictionary file failed!\n");
+    fprintf(stderr, "Reading words array from dictionary file failed!\n");
     goto exit_failure;
   }
   printToLog(debugFile, "wordcount is: %d\n", wordCountDictionary);
@@ -508,6 +497,11 @@ void convertEntireStringToLower(char *string) {
 }
 
 void getNonAlphabeticalCharsString(char *buffer) {
+  if (sizeof(buffer) < (CHAR_MAX - CHAR_MIN) + 2) {
+    printf("Crtical error\n");
+    return;
+  }
+  // printFlush("\n\nbuffer size: %lu\n\n\n", sizeof(buffer));
   buffer[0] = '\0';  // Reset the string to an empty string
   char temp[2] = {0};
   for (int i = CHAR_MIN; i <= CHAR_MAX; i++) {
@@ -555,7 +549,7 @@ char **splitStringOnWhiteSpace(const char *inputString, uint *wordCount) {
     *wordCount = wordCountLocal;
     return NULL;
   }
-  char delimiters[CHAR_MAX - CHAR_MIN + 1] = "\n";
+  char delimiters[CHAR_MAX - CHAR_MIN + 2] = "\n";
   getNonAlphabeticalCharsString(delimiters);
   // printf("delims: %s\n", delimiters);
   char *token = strtok((char *) inputString, delimiters); // cast to char *

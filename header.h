@@ -87,8 +87,6 @@ void freePointer(void **addressOfGenericPointer);
 spellingError *compareFileData(char **dictionaryData, char **fileData, const uint numEntriesDictionary,
 const uint numEntriesFile, uint *countTotalMistakes, uint *countInArr);
 void freeArrayOfSpellingErrors(spellingError **arrayOfMistakes, uint countInArr);
-uint numStringMismatchesInArrayOfStrings(const char **arrayOfDictionaryStrings, const char **arrayOfFileStrings,
-uint sizeDictionary, uint sizeFile,  const char *target);
 int partitionSpellingErrorArr(spellingError *arr, int start, int end);
 void quickSortSpellingErrorArr(spellingError *arr, int start, int end);
 int printToLog(const char *debugFile, const char *stringLiteral, ...);

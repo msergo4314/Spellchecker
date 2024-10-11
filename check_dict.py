@@ -14,7 +14,7 @@ def remove_duplicates_and_sort(filename : str) -> None:
     print(f"largest word in dictionary: {max(len(x) for x in sorted_lines)}")
     
 def main():
-    filename = 'dictionary.txt'
+    filename : str = 'dictionary.txt'
     remove_duplicates_and_sort(filename)
     print("Duplicates removed and sorted successfully.")
     

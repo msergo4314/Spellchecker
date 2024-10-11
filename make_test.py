@@ -31,8 +31,8 @@ def make_test_file(name : str = TEST_FILE_NAME, dictionary_words : list[str] = N
             else:
                 file.write(f'{word} ')
             if (i + 1) % int(1e6) == 0:
-                pass
                 print(f"writing word #{i + 1:.1e}")
+                
 def main() -> int:
     if not os.path.exists(DICTIONARY_FILE):
         print(f"dictionary at location {DICTIONARY_FILE} not found. Exiting")
